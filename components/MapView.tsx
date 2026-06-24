@@ -40,6 +40,8 @@ import AnalyticsPanel from "./AnalyticsPanel";
 import WatchlistView from "./WatchlistView";
 import ShareButton from "./ShareButton";
 import { useWatchlist } from "@/lib/useWatchlist";
+import RollupPanel from "./RollupPanel";
+import { aggregateRollup, RollupDim } from "@/lib/rollups";
 import {
   LatLng,
   pointInPolygon,
@@ -132,7 +134,10 @@ function MarkersLayer({
       updateTriggers: { getFillColor: features },
     });
     overlay.setProps({ layers: [layer] });
-  }, [features, visible, onSelect]);
+    // `map` is in the deps so this re-runs once the overlay is created (Effect A
+    // runs first in the same commit); without it the layer never attaches on
+    // first load and pins never paint.
+  }, [map, features, visible, onSelect]);
 
   return null;
 }
@@ -273,8 +278,9 @@ export default function MapView() {
     initialUrlState.sort ?? "revpar-desc"
   );
   const [rightTab, setRightTab] = useState<
-    "list" | "markets" | "analytics" | "watchlist"
+    "list" | "markets" | "rollups" | "analytics" | "watchlist"
   >("list");
+  const [rollupDim, setRollupDim] = useState<RollupDim>("zip");
   const watchlist = useWatchlist();
   const [revparRange, setRevparRange] = useState<Range | null>(null);
   const [roomsRange, setRoomsRange] = useState<Range | null>(null);
@@ -450,7 +456,12 @@ export default function MapView() {
     if (areaSelection) return [...areaSelection.features].sort(SORTERS[sort]);
     const q = query.trim().toLowerCase();
     let feats = filtered;
-    if (q) {
+    if (q.startsWith("zip:")) {
+      const z = q.slice(4).trim();
+      feats = feats.filter(
+        (f) => (f.properties.zip ?? "").toString().trim().toLowerCase() === z
+      );
+    } else if (q) {
       feats = feats.filter(
         (f) =>
           f.properties.name.toLowerCase().includes(q) ||
@@ -476,6 +487,10 @@ export default function MapView() {
   const marketRows = useMemo(() => aggregateMarkets(filtered), [filtered]);
   // Analytics charts reflect the in-scope set (selection/viewport/search).
   const inScopeMarkets = useMemo(() => aggregateMarkets(inScope), [inScope]);
+  const rollupRows = useMemo(
+    () => aggregateRollup(filtered, rollupDim),
+    [filtered, rollupDim]
+  );
 
   const exportCsv = useCallback(() => {
     const header = [
@@ -550,6 +565,35 @@ export default function MapView() {
       if (hit) {
         const [lng, lat] = hit.geometry.coordinates;
         controls.current?.flyTo(lng, lat);
+      }
+    },
+    [filtered]
+  );
+
+  const selectRollup = useCallback(
+    (dim: RollupDim, key: string) => {
+      setSelected(null);
+      setRightTab("list");
+      if (dim === "zip") {
+        setQuery(`zip:${key}`);
+        const hit = filtered.find(
+          (f) => (f.properties.zip ?? "").toString().trim() === key
+        );
+        if (hit) {
+          const [lng, lat] = hit.geometry.coordinates;
+          controls.current?.flyTo(lng, lat);
+        }
+      } else {
+        setQuery(key);
+        const hit = filtered.find(
+          (f) =>
+            (f.properties.city || "").trim().toLowerCase() ===
+            key.trim().toLowerCase()
+        );
+        if (hit) {
+          const [lng, lat] = hit.geometry.coordinates;
+          controls.current?.flyTo(lng, lat);
+        }
       }
     },
     [filtered]
@@ -813,6 +857,7 @@ export default function MapView() {
               {([
                 ["list", "Properties"],
                 ["markets", "Markets"],
+                ["rollups", "Rollups"],
                 ["analytics", "Analytics"],
                 ["watchlist", watchlist.ids.size ? `Saved ${watchlist.ids.size}` : "Saved"],
               ] as const).map(([id, label]) => (
@@ -820,7 +865,7 @@ export default function MapView() {
                   key={id}
                   type="button"
                   onClick={() => setRightTab(id)}
-                  className={`flex-1 whitespace-nowrap rounded-xl px-2 py-1.5 text-[11px] font-medium transition ${
+                  className={`flex-1 whitespace-nowrap rounded-xl px-1.5 py-1.5 text-[11px] font-medium transition ${
                     rightTab === id
                       ? "bg-gray-900 text-white"
                       : "text-gray-600 hover:bg-gray-100"
@@ -861,6 +906,13 @@ export default function MapView() {
               />
             ) : rightTab === "markets" ? (
               <MarketPanel rows={marketRows} onSelectMarket={selectMarket} />
+            ) : rightTab === "rollups" ? (
+              <RollupPanel
+                rows={rollupRows}
+                dim={rollupDim}
+                onDimChange={setRollupDim}
+                onSelect={selectRollup}
+              />
             ) : rightTab === "analytics" ? (
               <AnalyticsPanel
                 inScope={inScope}
