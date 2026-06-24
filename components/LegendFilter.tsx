@@ -25,8 +25,8 @@ export default function LegendFilter({
 }: LegendFilterProps) {
   const allOn = active.size === 3;
   return (
-    <div className="shrink-0 rounded-2xl bg-white/95 p-3 shadow-card ring-1 ring-black/5 backdrop-blur">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="shrink-0 rounded-2xl bg-white/95 p-2.5 shadow-card ring-1 ring-black/5 backdrop-blur md:p-3">
+      <div className="mb-1.5 flex items-center justify-between md:mb-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
           RevPAR scale
         </h2>
@@ -42,7 +42,40 @@ export default function LegendFilter({
         </button>
       </div>
 
-      <div className="flex flex-col gap-1">
+      {/* Compact horizontal chips on mobile so the property list keeps room. */}
+      <div className="flex gap-1.5 md:hidden">
+        {ROWS.map(({ bucket, title }) => {
+          const on = active.has(bucket);
+          return (
+            <button
+              key={bucket}
+              type="button"
+              onClick={() => onToggle(bucket)}
+              className={`flex flex-1 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left transition ${
+                on
+                  ? "border-gray-200 bg-white"
+                  : "border-transparent bg-gray-50 opacity-50"
+              }`}
+            >
+              <span
+                className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
+                style={{ backgroundColor: BUCKET_COLORS[bucket] }}
+              />
+              <span className="min-w-0">
+                <span className="block truncate text-[11px] font-medium leading-tight text-gray-700">
+                  {title.replace(" RevPAR", "")}
+                </span>
+                <span className="block text-[11px] tabular-nums leading-tight text-gray-400">
+                  {counts[bucket].toLocaleString()}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Detailed vertical legend on desktop. */}
+      <div className="hidden flex-col gap-1 md:flex">
         {ROWS.map(({ bucket, title, sub }) => {
           const on = active.has(bucket);
           return (
@@ -72,7 +105,7 @@ export default function LegendFilter({
         })}
       </div>
 
-      <p className="mt-2 border-t border-gray-100 pt-2 text-[11px] leading-snug text-gray-400">
+      <p className="mt-2 hidden border-t border-gray-100 pt-2 text-[11px] leading-snug text-gray-400 md:block">
         {layerMode === "heatmap"
           ? "Heatmap intensity is weighted by RevPAR. Tap a row to filter."
           : "Tap a row to filter the map. RevPAR = period room revenue ÷ available rooms."}
