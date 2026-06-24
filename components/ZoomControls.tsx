@@ -16,7 +16,11 @@ export default function ZoomControls({
   bearing,
 }: ZoomControlsProps) {
   return (
-    <div className="absolute bottom-6 right-4 z-20 flex flex-col items-center gap-2">
+    <div
+      className="absolute z-20 flex flex-col items-center gap-2
+        right-2 top-3
+        md:top-auto md:bottom-6 md:right-[21.5rem]"
+    >
       <div className="flex flex-col overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-black/5">
         <button
           type="button"

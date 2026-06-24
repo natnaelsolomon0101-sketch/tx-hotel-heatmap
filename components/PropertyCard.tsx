@@ -40,7 +40,11 @@ export default function PropertyCard({ hotel, onClose }: PropertyCardProps) {
     s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
   return (
-    <div className="absolute bottom-6 left-4 z-30 w-80 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-black/5">
+    <div
+      className="absolute z-30 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-black/5
+        inset-x-2 bottom-2 max-h-[80vh] overflow-y-auto
+        md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-none"
+    >
       <div className="relative h-36 w-full bg-gray-100">
         {hotel.photo ? (
           // eslint-disable-next-line @next/next/no-img-element

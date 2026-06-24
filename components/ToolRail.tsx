@@ -66,7 +66,7 @@ export default function ToolRail({
   onRadius,
 }: ToolRailProps) {
   return (
-    <div className="absolute left-4 top-1/2 z-20 -translate-y-1/2">
+    <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2 md:left-4">
       <div className="flex flex-col items-center gap-1 rounded-2xl bg-white/95 p-1.5 shadow-card ring-1 ring-black/5 backdrop-blur">
         <RailButton label="Recenter on Texas" onClick={onLocate}>
           <LocationIcon />

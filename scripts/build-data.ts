@@ -62,6 +62,17 @@ const CONFIG = {
   // Census batch geocoder, no key). Defaults to mapbox when a token exists.
   geocoder: (process.env.GEOCODER as "mapbox" | "census" | undefined) ?? null,
 
+  // Rooftop refinement (keyless): the Census geocoder only interpolates along
+  // street centerlines, so pins land ~100m–1km off the actual building. Photon
+  // (Komoot, OpenStreetMap, no key) is queried by hotel NAME + address, anchored
+  // to the Census coordinate. A refined point is accepted only when it's a
+  // building/lodging POI within `photonAcceptKm` of the anchor — otherwise we
+  // keep the Census coordinate. Results cache to photonCacheFile (resumable).
+  refineWithPhoton: true,
+  photonCacheFile: "data/photoncache.json",
+  photonAcceptKm: 4,
+  photonConcurrency: 4,
+
   mapboxToken:
     process.env.MAPBOX_GEOCODING_TOKEN ||
     process.env.NEXT_PUBLIC_MAPBOX_TOKEN ||
@@ -153,6 +164,23 @@ const titleAddrKey = (h: Hotel) =>
 const geoKey = (h: Hotel) =>
   norm(`${h.address}|${h.city}|${h.state}|${h.zip}`);
 
+function haversineM(
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number
+): number {
+  const R = 6371000;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const la1 = (aLat * Math.PI) / 180;
+  const la2 = (bLat * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 function quantile(sortedAsc: number[], p: number): number {
   if (sortedAsc.length === 0) return 0;
   const idx = p * (sortedAsc.length - 1);
@@ -240,6 +268,70 @@ async function geocodeCensusBatch(
     }
   }
   return out;
+}
+
+// Lodging / building POI types we trust as rooftop-accurate from Photon.
+const PHOTON_BUILDING_VALUES = new Set([
+  "hotel",
+  "motel",
+  "guest_house",
+  "hostel",
+  "resort",
+  "chalet",
+  "apartment",
+  "apartments",
+  "house",
+  "commercial",
+  "retail",
+]);
+
+/** Result of a Photon lookup: a coordinate, or `null` (no precise match), or
+ *  the sentinel `UNREACHABLE` when the service didn't respond (timeout / error).
+ *  Callers treat UNREACHABLE differently so we don't cache a transient outage. */
+const UNREACHABLE = Symbol("unreachable");
+type PhotonResult = { lng: number; lat: number } | null | typeof UNREACHABLE;
+
+/** Photon (OSM, keyless) refiner. Returns a precise building/POI coordinate,
+ *  null when the best match isn't building-precise, or UNREACHABLE on failure.
+ *  Each request has a hard timeout so a slow/overloaded public instance can't
+ *  hang the whole run. */
+async function geocodePhoton(
+  query: string,
+  anchorLng: number,
+  anchorLat: number,
+  timeoutMs = 6000
+): Promise<PhotonResult> {
+  const url =
+    `https://photon.komoot.io/api/?limit=1&lang=en` +
+    `&lat=${anchorLat}&lon=${anchorLng}&q=${encodeURIComponent(query)}`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (res.status === 429 || res.status >= 500) {
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        continue;
+      }
+      if (!res.ok) return null;
+      const json: any = await res.json();
+      const f = json.features?.[0];
+      if (!f) return null;
+      const props = f.properties ?? {};
+      const isBuilding =
+        props.osm_key === "building" ||
+        PHOTON_BUILDING_VALUES.has(props.osm_value) ||
+        props.housenumber != null;
+      if (!isBuilding) return null;
+      const [lng, lat] = f.geometry.coordinates;
+      return { lng, lat };
+    } catch {
+      clearTimeout(timer);
+      // timeout or network error — try once more, then report unreachable
+    }
+  }
+  return UNREACHABLE;
 }
 
 async function mapWithConcurrency<T>(
@@ -448,6 +540,65 @@ async function main() {
   console.log(
     `  placed ${placed.length.toLocaleString()} / ${hotels.length.toLocaleString()} hotels`
   );
+
+  // 3b) Rooftop refinement via Photon (keyless) ----------------------------
+  if (CONFIG.refineWithPhoton && !noGeocode) {
+    const pcache: Record<string, { lng: number; lat: number } | null> =
+      fs.existsSync(CONFIG.photonCacheFile)
+        ? JSON.parse(fs.readFileSync(CONFIG.photonCacheFile, "utf8"))
+        : {};
+
+    const need = placed.filter((h) => pcache[geoKey(h)] === undefined);
+    console.log(
+      `\n  refining ${need.length.toLocaleString()} pins via Photon (rooftop)...`
+    );
+
+    let done = 0;
+    let lastSave = 0;
+    let consecutiveUnreachable = 0;
+    let aborted = false;
+    await mapWithConcurrency(need, CONFIG.photonConcurrency, async (h) => {
+      if (aborted) return; // circuit broken — skip remaining (keep Census)
+      const q = `${h.name}, ${h.address}, ${h.city}, ${h.state} ${h.zip}`;
+      const r = await geocodePhoton(q, h.lng!, h.lat!);
+      if (r === UNREACHABLE) {
+        // Don't cache an outage; trip the breaker if the service is clearly down.
+        if (++consecutiveUnreachable >= 30 && !aborted) {
+          aborted = true;
+          console.log(
+            "  ⚠ Photon unreachable (30x in a row) — skipping refinement, keeping Census coords."
+          );
+        }
+        return;
+      }
+      consecutiveUnreachable = 0;
+      pcache[geoKey(h)] = r;
+      done++;
+      if (done % 200 === 0) console.log(`    ${done}/${need.length}`);
+      if (done - lastSave >= 500) {
+        fs.writeFileSync(CONFIG.photonCacheFile, JSON.stringify(pcache));
+        lastSave = done;
+      }
+    });
+    fs.writeFileSync(CONFIG.photonCacheFile, JSON.stringify(pcache));
+
+    // Apply: accept a refined point only when it's near the Census anchor.
+    let refined = 0;
+    for (const h of placed) {
+      const r = pcache[geoKey(h)];
+      if (
+        r &&
+        haversineM(h.lat!, h.lng!, r.lat, r.lng) <= CONFIG.photonAcceptKm * 1000
+      ) {
+        h.lng = r.lng;
+        h.lat = r.lat;
+        refined++;
+      }
+    }
+    console.log(
+      `  refined ${refined.toLocaleString()} / ${placed.length.toLocaleString()} pins to rooftop (rest kept Census)`
+    );
+  }
 
   // 4) Bucket by RevPAR percentile -----------------------------------------
   const revparVals = placed

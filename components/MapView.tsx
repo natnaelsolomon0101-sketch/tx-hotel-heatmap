@@ -369,7 +369,12 @@ export default function MapView() {
         onRadius={() => {}}
       />
 
-      <div className="absolute right-4 top-4 bottom-6 z-20 flex w-72 max-w-[78vw] flex-col gap-3">
+      {/* Right-side column on desktop; bottom sheet on mobile. */}
+      <div
+        className="absolute z-20 flex flex-col gap-2
+          inset-x-2 bottom-2 max-h-[52vh]
+          md:inset-x-auto md:left-auto md:right-4 md:top-4 md:bottom-4 md:w-80 md:max-h-none md:gap-3"
+      >
         <LegendFilter
           active={activeBuckets}
           counts={counts}
