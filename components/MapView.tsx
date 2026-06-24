@@ -232,8 +232,15 @@ export default function MapView() {
   const updateBounds = useCallback(() => {
     const m = mapRef.current?.getMap();
     if (!m) return;
-    const b = m.getBounds();
-    setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    try {
+      const b = m.getBounds();
+      const box = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+      if (box.every(Number.isFinite)) {
+        setBounds(box as [number, number, number, number]);
+      }
+    } catch {
+      /* transform not ready yet; ignore */
+    }
   }, []);
 
   const flyToFeature = useCallback((f: HotelFeature) => {
@@ -250,8 +257,11 @@ export default function MapView() {
 
   const selectedKey = selected ? featureKey(selected) : null;
 
-  const interactiveLayerIds =
-    layerMode === "pins" ? ["clusters", "unclustered-point"] : [];
+  // Stable identity per layerMode so react-map-gl doesn't re-apply props every render.
+  const interactiveLayerIds = useMemo(
+    () => (layerMode === "pins" ? ["clusters", "unclustered-point"] : []),
+    [layerMode]
+  );
 
   const onClick = useCallback((event: MapLayerMouseEvent) => {
     const feature = event.features?.[0];
