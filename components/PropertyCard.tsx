@@ -12,6 +12,8 @@ type PropertyCardProps = {
   onClose: () => void;
   /** Statewide + in-city RevPAR percentiles, computed from the full dataset. */
   percentiles?: HotelPercentiles | null;
+  /** Google Street View deep link for this hotel's coordinates. */
+  streetViewUrl?: string;
   /** Whether this hotel is on the watchlist; enables the Save toggle when set. */
   saved?: boolean;
   /** Toggle this hotel's watchlist membership. */
@@ -96,6 +98,7 @@ export default function PropertyCard({
   hotel,
   onClose,
   percentiles,
+  streetViewUrl,
   saved,
   onToggleSaved,
   inCompare,
@@ -255,6 +258,21 @@ export default function PropertyCard({
             Directions
           </a>
         </div>
+
+        {streetViewUrl && (
+          <a
+            href={streetViewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="5" r="2.4" />
+              <path d="M12 7.5c-2 0-3 1.2-3 3v3h1.5l.5 6h2l.5-6H15v-3c0-1.8-1-3-3-3z" />
+            </svg>
+            Street View
+          </a>
+        )}
 
         {onToggleCompare && (
           <button

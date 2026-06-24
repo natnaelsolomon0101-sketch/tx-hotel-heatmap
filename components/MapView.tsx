@@ -212,6 +212,19 @@ function MapController({
     map.setMapTypeId(mapTypeId as google.maps.MapTypeId);
   }, [map, mapTypeId]);
 
+  // Enable the draggable Street View "pegman" + an inline panorama. We run
+  // disableDefaultUI on the map, so re-enable just this control and tuck it
+  // bottom-left (clear of the header, right panel, and zoom controls).
+  useEffect(() => {
+    if (!map || !window.google) return;
+    map.setOptions({
+      streetViewControl: true,
+      streetViewControlOptions: {
+        position: google.maps.ControlPosition.LEFT_BOTTOM,
+      },
+    });
+  }, [map]);
+
   useEffect(() => {
     if (!map) return;
     const emit = () => {
@@ -281,6 +294,8 @@ export default function MapView() {
     "list" | "markets" | "rollups" | "analytics" | "watchlist"
   >("list");
   const [rollupDim, setRollupDim] = useState<RollupDim>("zip");
+  // Mobile bottom-sheet collapse (desktop always shows the full side panel).
+  const [sheetOpen, setSheetOpen] = useState(true);
   const watchlist = useWatchlist();
   const [revparRange, setRevparRange] = useState<Range | null>(null);
   const [roomsRange, setRoomsRange] = useState<Range | null>(null);
@@ -819,9 +834,24 @@ export default function MapView() {
 
       <div
         className="absolute z-20 flex flex-col gap-2 print:hidden
-          inset-x-2 bottom-2 max-h-[52vh]
+          inset-x-2 bottom-2 max-h-[60vh]
           md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3"
       >
+        {/* Mobile grabber: collapse the sheet to reveal the map. */}
+        <button
+          type="button"
+          onClick={() => setSheetOpen((o) => !o)}
+          className="flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-white/95 py-2 text-xs font-medium text-gray-600 shadow-card ring-1 ring-black/5 backdrop-blur md:hidden"
+        >
+          <span className="h-1 w-8 rounded-full bg-gray-300" />
+          {sheetOpen ? "Hide panel" : `Show ${listData.total.toLocaleString()} properties`}
+        </button>
+
+        <div
+          className={`min-h-0 flex-col gap-2 md:flex md:gap-3 ${
+            sheetOpen ? "flex flex-1" : "hidden"
+          }`}
+        >
         <LegendFilter
           active={activeBuckets}
           counts={counts}
@@ -829,20 +859,22 @@ export default function MapView() {
           onReset={() => setActiveBuckets(new Set(ALL_BUCKETS))}
           layerMode={layerMode}
         />
-        <RangeFilters
-          revparMin={ranges.revpar[0]}
-          revparMax={ranges.revpar[1]}
-          revpar={revparVal}
-          onRevparChange={setRevparRange}
-          roomsMin={ranges.rooms[0]}
-          roomsMax={ranges.rooms[1]}
-          rooms={roomsVal}
-          onRoomsChange={setRoomsRange}
-          onReset={() => {
-            setRevparRange(ranges.revpar);
-            setRoomsRange(ranges.rooms);
-          }}
-        />
+        <div className="hidden md:block">
+          <RangeFilters
+            revparMin={ranges.revpar[0]}
+            revparMax={ranges.revpar[1]}
+            revpar={revparVal}
+            onRevparChange={setRevparRange}
+            roomsMin={ranges.rooms[0]}
+            roomsMax={ranges.rooms[1]}
+            rooms={roomsVal}
+            onRoomsChange={setRoomsRange}
+            onReset={() => {
+              setRevparRange(ranges.revpar);
+              setRoomsRange(ranges.rooms);
+            }}
+          />
+        </div>
         {areaSelection ? (
           <AreaSummary
             label={areaSelection.label}
@@ -932,6 +964,7 @@ export default function MapView() {
             )}
           </>
         )}
+        </div>
       </div>
 
       <div className="print:hidden">
@@ -952,6 +985,9 @@ export default function MapView() {
             selected.properties.city,
             revparIndex
           )}
+          streetViewUrl={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${
+            selected.geometry.coordinates[1]
+          },${selected.geometry.coordinates[0]}`}
         />
       )}
 
