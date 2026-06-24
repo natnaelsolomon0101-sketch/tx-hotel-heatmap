@@ -139,6 +139,85 @@ export function decodeState(
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Human-readable view summary.
+// ---------------------------------------------------------------------------
+
+const BUCKET_SHORT: Record<Bucket, string> = {
+  red: "Top",
+  yellow: "Mid",
+  gray: "Bottom",
+};
+
+const SORT_LABELS: Record<SortKey, string> = {
+  "revpar-desc": "RevPAR high→low",
+  "revpar-asc": "RevPAR low→high",
+  "rooms-desc": "most rooms",
+  "name-asc": "name A→Z",
+};
+
+const usd0 = (n: number) =>
+  n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+
+/**
+ * Build a plain-text, one-line description of the current filtered view —
+ * suitable for pasting into a deal note or chat. Pure (no DOM). Only mentions a
+ * dimension when it's actually narrowed from the data-driven full span, so an
+ * unfiltered view reads simply "TX hotels · all buckets · N properties".
+ *
+ * @param state    the current serializable view state
+ * @param ranges   the data-driven full bounds { revpar:[lo,hi], rooms:[lo,hi] }
+ * @param current  the live slider values { revpar:[lo,hi], rooms:[lo,hi] }
+ * @param count    number of properties currently in scope
+ */
+export function describeView(
+  state: UrlState,
+  ranges: { revpar: [number, number]; rooms: [number, number] },
+  current: { revpar: [number, number]; rooms: [number, number] },
+  count: number
+): string {
+  const parts: string[] = ["TX hotels"];
+
+  const [rpLo, rpHi] = current.revpar;
+  if (rpLo > ranges.revpar[0] || rpHi < ranges.revpar[1]) {
+    parts.push(`RevPAR ${usd0(rpLo)}–${usd0(rpHi)}`);
+  }
+
+  const [rmLo, rmHi] = current.rooms;
+  if (rmLo > ranges.rooms[0] || rmHi < ranges.rooms[1]) {
+    parts.push(`${Math.round(rmLo).toLocaleString()}–${Math.round(rmHi).toLocaleString()} rooms`);
+  }
+
+  if (
+    state.buckets.length > 0 &&
+    state.buckets.length < ALL_BUCKETS.length
+  ) {
+    const labels = ALL_BUCKETS.filter((b) => state.buckets.includes(b)).map(
+      (b) => BUCKET_SHORT[b]
+    );
+    parts.push(`buckets: ${labels.join("+")}`);
+  }
+
+  const q = state.q?.trim();
+  if (q) parts.push(`“${q}”`);
+
+  if (state.layer === "heatmap") parts.push("heatmap");
+
+  if (state.sort && state.sort !== "revpar-desc") {
+    parts.push(`sorted ${SORT_LABELS[state.sort]}`);
+  }
+
+  parts.push(
+    `${count.toLocaleString()} ${count === 1 ? "property" : "properties"}`
+  );
+
+  return parts.join(" · ");
+}
+
 /** Read the current URL's query into a partial state. SSR-safe (returns {}). */
 export function readUrlState(): Partial<UrlState> {
   if (typeof window === "undefined") return {};

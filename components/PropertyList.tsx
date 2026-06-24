@@ -2,7 +2,9 @@
 
 import { RefObject } from "react";
 import { BUCKET_COLORS, HotelFeature } from "@/lib/types";
+import { roundPct } from "@/lib/percentile";
 import EmptyState from "@/components/EmptyState";
+import { BookmarkIcon } from "@/components/icons";
 
 export type SortKey = "revpar-desc" | "revpar-asc" | "rooms-desc" | "name-asc";
 
@@ -27,6 +29,16 @@ type PropertyListProps = {
   searchInputRef?: RefObject<HTMLInputElement>;
   onClear?: () => void;
   hasFilters?: boolean;
+  isCompared?: (key: string) => boolean;
+  onToggleCompare?: (f: HotelFeature) => void;
+  compareMax?: number;
+  compareCount?: number;
+  /** Statewide RevPAR percentile (0–100) for a row, or null when unranked. */
+  getPercentile?: (f: HotelFeature) => number | null;
+  /** Saved feature keys; when provided, rows show a bookmark toggle. */
+  savedKeys?: Set<string>;
+  /** Toggle a feature's watchlist membership by key. */
+  onToggleSaved?: (key: string) => void;
 };
 
 const titleCase = (s: string) =>
@@ -60,6 +72,13 @@ export default function PropertyList({
   searchInputRef,
   onClear,
   hasFilters,
+  isCompared,
+  onToggleCompare,
+  compareMax = 3,
+  compareCount = 0,
+  getPercentile,
+  savedKeys,
+  onToggleSaved,
 }: PropertyListProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white/95 shadow-card ring-1 ring-black/5 backdrop-blur">
@@ -145,36 +164,91 @@ export default function PropertyList({
               const p = f.properties;
               const k = featureKey(f);
               const active = k === selectedKey;
+              const pctRaw = getPercentile?.(f);
+              const pct = pctRaw == null ? null : roundPct(pctRaw);
+              const saved = savedKeys?.has(k) ?? false;
+              const compared = isCompared?.(k) ?? false;
+              const compareDisabled = !compared && compareCount >= compareMax;
               return (
                 <li key={k + i}>
-                  <button
-                    onClick={() => onSelect(f)}
-                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-left transition ${
+                  <div
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 transition ${
                       active ? "bg-gray-100" : "hover:bg-gray-50"
                     }`}
                   >
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
-                      style={{ backgroundColor: BUCKET_COLORS[p.bucket] }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-gray-800">
-                        {titleCase(p.name)}
+                    <button
+                      onClick={() => onSelect(f)}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                    >
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                        style={{ backgroundColor: BUCKET_COLORS[p.bucket] }}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-gray-800">
+                          {titleCase(p.name)}
+                        </span>
+                        <span className="block truncate text-[11px] text-gray-500">
+                          {titleCase(p.city)}, {p.state}
+                          {p.rooms != null ? ` · ${p.rooms} rms` : ""}
+                        </span>
                       </span>
-                      <span className="block truncate text-[11px] text-gray-500">
-                        {titleCase(p.city)}, {p.state}
-                        {p.rooms != null ? ` · ${p.rooms} rms` : ""}
+                      {pct != null && (
+                        <span
+                          className="shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-500"
+                          title={`Statewide RevPAR percentile: P${pct}`}
+                        >
+                          P{pct}
+                        </span>
+                      )}
+                      <span className="shrink-0 text-right">
+                        <span className="block text-sm font-semibold tabular-nums text-gray-900">
+                          {money(p.revpar)}
+                        </span>
+                        <span className="block text-[10px] uppercase tracking-wide text-gray-400">
+                          RevPAR
+                        </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 text-right">
-                      <span className="block text-sm font-semibold tabular-nums text-gray-900">
-                        {money(p.revpar)}
-                      </span>
-                      <span className="block text-[10px] uppercase tracking-wide text-gray-400">
-                        RevPAR
-                      </span>
-                    </span>
-                  </button>
+                    </button>
+                    {onToggleCompare && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleCompare(f)}
+                        aria-pressed={compared}
+                        disabled={compareDisabled}
+                        title={
+                          compared
+                            ? "Remove from compare"
+                            : compareDisabled
+                            ? `Max ${compareMax} in compare`
+                            : "Add to compare"
+                        }
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-base leading-none transition ${
+                          compared
+                            ? "bg-gray-900 text-white"
+                            : "text-gray-300 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40 disabled:hover:bg-transparent"
+                        }`}
+                      >
+                        {compared ? "★" : "✩"}
+                      </button>
+                    )}
+                    {onToggleSaved && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleSaved(k)}
+                        aria-label={saved ? "Remove from watchlist" : "Save to watchlist"}
+                        aria-pressed={saved}
+                        title={saved ? "Saved — click to remove" : "Save to watchlist"}
+                        className={`shrink-0 rounded-md p-1 transition ${
+                          saved
+                            ? "text-gray-900 hover:bg-gray-100"
+                            : "text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+                        }`}
+                      >
+                        <BookmarkIcon className="h-4 w-4" filled={saved} />
+                      </button>
+                    )}
+                  </div>
                 </li>
               );
             })}

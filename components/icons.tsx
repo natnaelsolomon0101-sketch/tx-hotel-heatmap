@@ -95,3 +95,16 @@ export function CloseIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function BookmarkIcon({
+  className,
+  filled,
+}: IconProps & { filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className ?? "h-4 w-4"}
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z" />
+    </svg>
+  );
+}

@@ -3,11 +3,25 @@
 import { useState } from "react";
 import { BUCKET_COLORS, BUCKET_LABELS, HotelProperties } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
-import { CloseIcon } from "./icons";
+import { HotelPercentiles } from "@/lib/percentile";
+import PercentileBar from "./PercentileBar";
+import { BookmarkIcon, CloseIcon } from "./icons";
 
 type PropertyCardProps = {
   hotel: HotelProperties;
   onClose: () => void;
+  /** Statewide + in-city RevPAR percentiles, computed from the full dataset. */
+  percentiles?: HotelPercentiles | null;
+  /** Whether this hotel is on the watchlist; enables the Save toggle when set. */
+  saved?: boolean;
+  /** Toggle this hotel's watchlist membership. */
+  onToggleSaved?: () => void;
+  /** Whether this hotel is currently in the compare tray. */
+  inCompare?: boolean;
+  /** Whether the compare tray is full (and this hotel is not already in it). */
+  compareFull?: boolean;
+  /** Toggle this hotel's compare-tray membership; enables the Compare button. */
+  onToggleCompare?: () => void;
 };
 
 function pct(n: number | null): string {
@@ -78,7 +92,16 @@ function DirectionsIcon() {
   );
 }
 
-export default function PropertyCard({ hotel, onClose }: PropertyCardProps) {
+export default function PropertyCard({
+  hotel,
+  onClose,
+  percentiles,
+  saved,
+  onToggleSaved,
+  inCompare,
+  compareFull,
+  onToggleCompare,
+}: PropertyCardProps) {
   const [copied, setCopied] = useState(false);
 
   const titleCase = (s: string) =>
@@ -129,14 +152,28 @@ export default function PropertyCard({ hotel, onClose }: PropertyCardProps) {
           className="absolute left-3 top-3 h-3.5 w-3.5 rounded-full ring-2 ring-white"
           style={{ backgroundColor: BUCKET_COLORS[hotel.bucket] }}
         />
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
-        >
-          <CloseIcon />
-        </button>
+        <div className="absolute right-2 top-2 flex items-center gap-1.5">
+          {onToggleSaved && (
+            <button
+              type="button"
+              onClick={onToggleSaved}
+              aria-label={saved ? "Remove from watchlist" : "Save to watchlist"}
+              aria-pressed={saved}
+              title={saved ? "Saved — click to remove" : "Save to watchlist"}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
+            >
+              <BookmarkIcon className="h-4 w-4" filled={saved} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
+          >
+            <CloseIcon />
+          </button>
+        </div>
       </div>
 
       <div className="p-4">
@@ -177,6 +214,27 @@ export default function PropertyCard({ hotel, onClose }: PropertyCardProps) {
           <Stat label="Revenue" value={fmtMoney(hotel.revenue)} />
         </div>
 
+        {percentiles && (
+          <div className="mt-3 space-y-2.5 border-t border-gray-100 pt-3">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+              Performance
+            </div>
+            <PercentileBar
+              label="Statewide"
+              value={percentiles.statewide}
+            />
+            <PercentileBar
+              label={hotel.city ? `In ${titleCase(hotel.city)}` : "In market"}
+              value={percentiles.cityCount <= 1 ? null : percentiles.inCity}
+              note={
+                percentiles.cityCount <= 1 && hotel.revpar != null
+                  ? "only property in city"
+                  : undefined
+              }
+            />
+          </div>
+        )}
+
         <div className="mt-3 flex gap-2">
           <button
             type="button"
@@ -197,6 +255,28 @@ export default function PropertyCard({ hotel, onClose }: PropertyCardProps) {
             Directions
           </a>
         </div>
+
+        {onToggleCompare && (
+          <button
+            type="button"
+            onClick={onToggleCompare}
+            disabled={!inCompare && compareFull}
+            title={
+              inCompare
+                ? "Remove from compare"
+                : compareFull
+                ? "Max 3 in compare"
+                : "Add to compare"
+            }
+            className={`mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium ring-1 ring-black/5 transition-colors ${
+              inCompare
+                ? "bg-gray-900 text-white hover:bg-gray-700"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:hover:bg-gray-100"
+            }`}
+          >
+            {inCompare ? "★ In compare" : compareFull ? "Compare full (3)" : "+ Compare"}
+          </button>
+        )}
 
         {hotel.flagged && (
           <p className="mt-2 text-[11px] text-amber-600">

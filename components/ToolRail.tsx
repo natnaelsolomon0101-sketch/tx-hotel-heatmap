@@ -18,6 +18,8 @@ type ToolRailProps = {
   onCycleMapType: () => void;
   onPolygon: () => void;
   onRadius: () => void;
+  polygonActive?: boolean;
+  radiusActive?: boolean;
 };
 
 function RailButton({
@@ -64,6 +66,8 @@ export default function ToolRail({
   onCycleMapType,
   onPolygon,
   onRadius,
+  polygonActive,
+  radiusActive,
 }: ToolRailProps) {
   return (
     <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2 md:left-4">
@@ -71,10 +75,22 @@ export default function ToolRail({
         <RailButton label="Recenter on Texas" onClick={onLocate}>
           <LocationIcon />
         </RailButton>
-        <RailButton label="Draw polygon (coming soon)" onClick={onPolygon}>
+        <RailButton
+          label={
+            polygonActive ? "Drawing polygon — Esc to cancel" : "Draw polygon"
+          }
+          active={polygonActive}
+          onClick={onPolygon}
+        >
           <PolygonIcon />
         </RailButton>
-        <RailButton label="Radius search (coming soon)" onClick={onRadius}>
+        <RailButton
+          label={
+            radiusActive ? "Radius search — click map to place" : "Radius search"
+          }
+          active={radiusActive}
+          onClick={onRadius}
+        >
           <RadiusIcon />
         </RailButton>
         <div className="my-0.5 h-px w-7 bg-gray-200" />

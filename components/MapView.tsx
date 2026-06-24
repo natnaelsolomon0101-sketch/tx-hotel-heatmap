@@ -22,6 +22,7 @@ import PropertyCard from "./PropertyCard";
 import PropertyList, { featureKey, SortKey } from "./PropertyList";
 import HeaderBar from "./HeaderBar";
 import { computeStats } from "@/lib/stats";
+import { buildRevparIndex, getHotelPercentiles } from "@/lib/percentile";
 import MarketPanel from "./MarketPanel";
 import { aggregateMarkets } from "@/lib/markets";
 import RangeFilters, { Range } from "./RangeFilters";
@@ -31,6 +32,21 @@ import ShortcutsHelp from "./ShortcutsHelp";
 import BriefButton from "./BriefButton";
 import PrintBrief from "./PrintBrief";
 import Coachmark from "./Coachmark";
+import CompareTray from "./CompareTray";
+import PolygonTool, { Vertex } from "./PolygonTool";
+import RadiusTool from "./RadiusTool";
+import AreaSummary from "./AreaSummary";
+import AnalyticsPanel from "./AnalyticsPanel";
+import WatchlistView from "./WatchlistView";
+import ShareButton from "./ShareButton";
+import { useWatchlist } from "@/lib/useWatchlist";
+import {
+  LatLng,
+  pointInPolygon,
+  pointInCircle,
+  polygonAreaSqMi,
+  RadiusStep,
+} from "@/lib/geo";
 
 const GOOGLE_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -256,11 +272,26 @@ export default function MapView() {
   const [sort, setSort] = useState<SortKey>(
     initialUrlState.sort ?? "revpar-desc"
   );
-  const [rightTab, setRightTab] = useState<"list" | "markets">("list");
+  const [rightTab, setRightTab] = useState<
+    "list" | "markets" | "analytics" | "watchlist"
+  >("list");
+  const watchlist = useWatchlist();
   const [revparRange, setRevparRange] = useState<Range | null>(null);
   const [roomsRange, setRoomsRange] = useState<Range | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [compare, setCompare] = useState<HotelFeature[]>([]);
+  const COMPARE_MAX = 3;
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // ---- Area selection (polygon lasso + radius) -------------------------
+  // areaMode === null  → normal viewport-driven list
+  // areaMode === "polygon" → drawing/holding a freeform ring
+  // areaMode === "radius"  → placing/holding a circle center
+  const [areaMode, setAreaMode] = useState<null | "polygon" | "radius">(null);
+  const [polyVertices, setPolyVertices] = useState<Vertex[]>([]);
+  const [polyClosed, setPolyClosed] = useState(false);
+  const [circleCenter, setCircleCenter] = useState<LatLng | null>(null);
+  const [circleRadius, setCircleRadius] = useState<RadiusStep>(3);
 
   const controls = useRef<{
     zoomIn: () => void;
@@ -283,6 +314,11 @@ export default function MapView() {
       cancelled = true;
     };
   }, []);
+
+  const revparIndex = useMemo(
+    () => buildRevparIndex(data?.features ?? []),
+    [data]
+  );
 
   const counts = useMemo(() => {
     const c: Record<Bucket, number> = { red: 0, yellow: 0, gray: 0 };
@@ -322,6 +358,14 @@ export default function MapView() {
     };
   }, [data]);
 
+  const sortedRevpars = useMemo(() => {
+    const arr: number[] = [];
+    data?.features.forEach((f) => {
+      if (f.properties.revpar != null) arr.push(f.properties.revpar);
+    });
+    return arr.sort((a, b) => a - b);
+  }, [data]);
+
   // Once bounds are known, default each slider to the full span.
   useEffect(() => {
     if (!data) return;
@@ -355,8 +399,55 @@ export default function MapView() {
     });
   }, [data, activeBuckets, revparVal, roomsVal, ranges]);
 
-  // In-scope set: bucket/range filter + (search text OR current viewport).
+  // An active, finished area selection (closed polygon OR placed circle).
+  // When set, it overrides the viewport/search scope for stats + list.
+  const areaSelection = useMemo<{
+    label: string;
+    detail: string;
+    features: HotelFeature[];
+  } | null>(() => {
+    if (areaMode === "polygon" && polyClosed && polyVertices.length >= 3) {
+      const ring = polyVertices as [number, number][];
+      const feats = filtered.filter((f) =>
+        pointInPolygon(
+          f.geometry.coordinates as [number, number],
+          ring
+        )
+      );
+      const sqmi = polygonAreaSqMi(ring);
+      return {
+        label: "Drawn area",
+        detail: `${polyVertices.length} vertices · ~${
+          sqmi >= 10 ? Math.round(sqmi) : sqmi.toFixed(1)
+        } sq mi`,
+        features: feats,
+      };
+    }
+    if (areaMode === "radius" && circleCenter) {
+      const feats = filtered.filter((f) => {
+        const [lng, lat] = f.geometry.coordinates;
+        return pointInCircle(lat, lng, circleCenter, circleRadius);
+      });
+      return {
+        label: `${circleRadius} mi radius`,
+        detail: `${feats.length.toLocaleString()} hotels within ${circleRadius} mi`,
+        features: feats,
+      };
+    }
+    return null;
+  }, [
+    areaMode,
+    polyClosed,
+    polyVertices,
+    circleCenter,
+    circleRadius,
+    filtered,
+  ]);
+
+  // In-scope set: an active area selection wins; otherwise bucket/range filter
+  // + (search text OR current viewport).
   const inScope = useMemo(() => {
+    if (areaSelection) return [...areaSelection.features].sort(SORTERS[sort]);
     const q = query.trim().toLowerCase();
     let feats = filtered;
     if (q) {
@@ -373,7 +464,7 @@ export default function MapView() {
       });
     }
     return [...feats].sort(SORTERS[sort]);
-  }, [filtered, bounds, query, sort]);
+  }, [areaSelection, filtered, bounds, query, sort]);
 
   const listData = useMemo(
     () => ({ rows: inScope.slice(0, LIST_LIMIT), total: inScope.length }),
@@ -383,6 +474,8 @@ export default function MapView() {
   const stats = useMemo(() => computeStats(inScope), [inScope]);
   const briefRows = useMemo(() => inScope.slice(0, 25), [inScope]);
   const marketRows = useMemo(() => aggregateMarkets(filtered), [filtered]);
+  // Analytics charts reflect the in-scope set (selection/viewport/search).
+  const inScopeMarkets = useMemo(() => aggregateMarkets(inScope), [inScope]);
 
   const exportCsv = useCallback(() => {
     const header = [
@@ -421,6 +514,29 @@ export default function MapView() {
     controls.current?.flyTo(lng, lat);
   }, []);
 
+  const isCompared = useCallback(
+    (key: string) => compare.some((f) => featureKey(f) === key),
+    [compare]
+  );
+
+  const toggleCompare = useCallback((f: HotelFeature) => {
+    const key = featureKey(f);
+    setCompare((prev) => {
+      if (prev.some((x) => featureKey(x) === key))
+        return prev.filter((x) => featureKey(x) !== key);
+      if (prev.length >= COMPARE_MAX) return prev; // max 3 — ignore extra adds
+      return [...prev, f];
+    });
+  }, []);
+
+  const removeCompare = useCallback(
+    (key: string) =>
+      setCompare((prev) => prev.filter((x) => featureKey(x) !== key)),
+    []
+  );
+
+  const clearCompare = useCallback(() => setCompare([]), []);
+
   const selectMarket = useCallback(
     (city: string) => {
       setSelected(null);
@@ -454,6 +570,59 @@ export default function MapView() {
     setRoomsRange(ranges.rooms);
     setQuery("");
   }, [ranges]);
+
+  // ---- Area tool controls ---------------------------------------------
+  const clearArea = useCallback(() => {
+    setAreaMode(null);
+    setPolyVertices([]);
+    setPolyClosed(false);
+    setCircleCenter(null);
+  }, []);
+
+  const togglePolygon = useCallback(() => {
+    setSelected(null);
+    setCircleCenter(null); // a polygon and a circle never coexist
+    setAreaMode((m) => {
+      if (m === "polygon") {
+        setPolyVertices([]);
+        setPolyClosed(false);
+        return null;
+      }
+      setPolyVertices([]);
+      setPolyClosed(false);
+      return "polygon";
+    });
+  }, []);
+
+  const toggleRadius = useCallback(() => {
+    setSelected(null);
+    setPolyVertices([]); // clear any in-progress/closed polygon first
+    setPolyClosed(false);
+    setAreaMode((m) => {
+      if (m === "radius") {
+        setCircleCenter(null);
+        return null;
+      }
+      setCircleCenter(null);
+      return "radius";
+    });
+  }, []);
+
+  // Routes a bare map click. While an area tool is armed it feeds the tool;
+  // otherwise it just dismisses the property card (original behavior).
+  const onMapClick = useCallback(
+    (e: { detail?: { latLng?: { lat: number; lng: number } | null } }) => {
+      if (areaMode === "radius") {
+        const ll = e.detail?.latLng;
+        if (ll) setCircleCenter({ lat: ll.lat, lng: ll.lng });
+        return;
+      }
+      // Polygon clicks are handled inside PolygonTool's own map listener.
+      if (areaMode === "polygon") return;
+      setSelected(null);
+    },
+    [areaMode]
+  );
 
   const hasFilters =
     activeBuckets.size < ALL_BUCKETS.length ||
@@ -498,6 +667,7 @@ export default function MapView() {
     onRecenter: () => controls.current?.recenter(),
     onEscape: () => {
       if (helpOpen) setHelpOpen(false);
+      else if (areaMode) clearArea();
       else setSelected(null);
     },
     onToggleHelp: () => setHelpOpen((v) => !v),
@@ -533,7 +703,7 @@ export default function MapView() {
             disableDefaultUI
             clickableIcons={false}
             style={{ width: "100%", height: "100%" }}
-            onClick={() => setSelected(null)}
+            onClick={onMapClick}
           >
             <MapController
               mapTypeId={MAP_TYPES[mapTypeIndex].id}
@@ -546,13 +716,40 @@ export default function MapView() {
               onSelect={flyToFeature}
             />
             <HeatLayer features={filtered} visible={layerMode === "heatmap"} />
+            <PolygonTool
+              active={areaMode === "polygon"}
+              vertices={polyVertices}
+              closed={polyClosed}
+              onAddVertex={(v) => setPolyVertices((prev) => [...prev, v])}
+              onClose={() =>
+                setPolyVertices((prev) => {
+                  if (prev.length >= 3) setPolyClosed(true);
+                  return prev;
+                })
+              }
+              onAbort={clearArea}
+            />
+            <RadiusTool
+              active={areaMode === "radius"}
+              center={circleCenter}
+              radius={circleRadius}
+              onRadiusChange={setCircleRadius}
+              onClear={clearArea}
+            />
           </Map>
         </APIProvider>
       </div>
 
       <div className="print:hidden">
         <HeaderBar stats={stats} period={DATA_PERIOD} />
-        <div className="absolute right-3 top-2.5 z-40 md:right-4">
+        <div className="absolute right-3 top-2.5 z-40 flex items-center gap-2 md:right-4">
+          <ShareButton
+            urlState={urlState}
+            ranges={ranges}
+            revparVal={revparVal}
+            roomsVal={roomsVal}
+            count={listData.total}
+          />
           <BriefButton />
         </div>
       </div>
@@ -569,8 +766,10 @@ export default function MapView() {
           onCycleMapType={() =>
             setMapTypeIndex((i) => (i + 1) % MAP_TYPES.length)
           }
-          onPolygon={() => {}}
-          onRadius={() => {}}
+          polygonActive={areaMode === "polygon"}
+          radiusActive={areaMode === "radius"}
+          onPolygon={togglePolygon}
+          onRadius={toggleRadius}
         />
       </div>
 
@@ -600,43 +799,86 @@ export default function MapView() {
             setRoomsRange(ranges.rooms);
           }}
         />
-        <div className="flex shrink-0 gap-1 rounded-2xl bg-white/95 p-1 shadow-card ring-1 ring-black/5 backdrop-blur">
-          {([
-            ["list", "Properties"],
-            ["markets", "Markets"],
-          ] as const).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setRightTab(id)}
-              className={`flex-1 rounded-xl px-3 py-1.5 text-xs font-medium transition ${
-                rightTab === id
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {rightTab === "list" ? (
-          <PropertyList
-            rows={listData.rows}
-            total={listData.total}
-            limit={LIST_LIMIT}
-            query={query}
-            onQuery={setQuery}
-            onSelect={flyToFeature}
-            selectedKey={selectedKey}
-            sort={sort}
-            onSort={setSort}
+        {areaSelection ? (
+          <AreaSummary
+            label={areaSelection.label}
+            detail={areaSelection.detail}
+            features={areaSelection.features}
             onExport={exportCsv}
-            searchInputRef={searchInputRef}
-            onClear={resetAll}
-            hasFilters={hasFilters}
+            onClear={clearArea}
           />
         ) : (
-          <MarketPanel rows={marketRows} onSelectMarket={selectMarket} />
+          <>
+            <div className="flex shrink-0 gap-0.5 rounded-2xl bg-white/95 p-1 shadow-card ring-1 ring-black/5 backdrop-blur">
+              {([
+                ["list", "Properties"],
+                ["markets", "Markets"],
+                ["analytics", "Analytics"],
+                ["watchlist", watchlist.ids.size ? `Saved ${watchlist.ids.size}` : "Saved"],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setRightTab(id)}
+                  className={`flex-1 whitespace-nowrap rounded-xl px-2 py-1.5 text-[11px] font-medium transition ${
+                    rightTab === id
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {rightTab === "list" ? (
+              <PropertyList
+                rows={listData.rows}
+                total={listData.total}
+                limit={LIST_LIMIT}
+                query={query}
+                onQuery={setQuery}
+                onSelect={flyToFeature}
+                selectedKey={selectedKey}
+                sort={sort}
+                onSort={setSort}
+                onExport={exportCsv}
+                searchInputRef={searchInputRef}
+                onClear={resetAll}
+                hasFilters={hasFilters}
+                isCompared={isCompared}
+                onToggleCompare={toggleCompare}
+                compareMax={COMPARE_MAX}
+                compareCount={compare.length}
+                getPercentile={(f) =>
+                  getHotelPercentiles(
+                    f.properties.revpar,
+                    f.properties.city,
+                    revparIndex
+                  ).statewide
+                }
+                savedKeys={watchlist.ids}
+                onToggleSaved={watchlist.toggle}
+              />
+            ) : rightTab === "markets" ? (
+              <MarketPanel rows={marketRows} onSelectMarket={selectMarket} />
+            ) : rightTab === "analytics" ? (
+              <AnalyticsPanel
+                inScope={inScope}
+                stats={stats}
+                marketRows={inScopeMarkets}
+                onSelectMarket={selectMarket}
+              />
+            ) : (
+              <WatchlistView
+                features={data?.features ?? []}
+                ids={watchlist.ids}
+                onSelect={flyToFeature}
+                onRemove={watchlist.toggle}
+                onClear={watchlist.clear}
+                selectedKey={selectedKey}
+              />
+            )}
+          </>
         )}
       </div>
 
@@ -653,6 +895,11 @@ export default function MapView() {
         <PropertyCard
           hotel={selected.properties}
           onClose={() => setSelected(null)}
+          percentiles={getHotelPercentiles(
+            selected.properties.revpar,
+            selected.properties.city,
+            revparIndex
+          )}
         />
       )}
 
@@ -662,6 +909,17 @@ export default function MapView() {
           <code className="font-mono">npm run build-data</code> to generate
           public/hotels.geojson.
         </div>
+      )}
+
+      {compare.length > 0 && (
+        <CompareTray
+          items={compare}
+          sortedRevpars={sortedRevpars}
+          onRemove={removeCompare}
+          onClear={clearCompare}
+          onFlyTo={flyToFeature}
+          max={COMPARE_MAX}
+        />
       )}
 
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
