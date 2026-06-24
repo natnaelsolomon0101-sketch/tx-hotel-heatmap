@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bucket, BUCKET_LABELS, HotelProperties } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { HotelPercentiles } from "@/lib/percentile";
@@ -196,6 +196,17 @@ export default function PropertyCard({
     return m ? `${m[1]},${m[2]}` : null;
   })();
 
+  // When the dataset has no photo, fetch one from Google (Places photo, then
+  // Street View) via our server route. Falls back to the placeholder on 404.
+  const apiPhoto = hotel.photo
+    ? null
+    : `/api/hotel-photo?name=${encodeURIComponent(hotel.name)}${
+        coordsText ? `&loc=${coordsText}` : ""
+      }`;
+  const [photoFailed, setPhotoFailed] = useState(false);
+  useEffect(() => setPhotoFailed(false), [hotel.name, coordsText]);
+  const photoSrc = hotel.photo ?? (photoFailed ? null : apiPhoto);
+
   const copy = (kind: "address" | "coords" | "directions", text: string) => {
     navigator.clipboard
       .writeText(text)
@@ -268,11 +279,13 @@ export default function PropertyCard({
         }
       >
       <div className="relative h-36 w-full bg-muted">
-        {hotel.photo ? (
+        {photoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={hotel.photo}
+            src={photoSrc}
             alt={titleCase(hotel.name)}
+            loading="lazy"
+            onError={() => setPhotoFailed(true)}
             className="h-full w-full object-cover"
           />
         ) : (
