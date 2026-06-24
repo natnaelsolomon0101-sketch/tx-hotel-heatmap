@@ -4,39 +4,33 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Map, {
   Source,
   Layer,
+  AttributionControl,
   type MapRef,
   type MapLayerMouseEvent,
-  type CircleLayer,
-  type SymbolLayer,
-  type HeatmapLayer,
-} from "react-map-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+  type LayerProps,
+} from "react-map-gl/maplibre";
+import "maplibre-gl/dist/maplibre-gl.css";
 
-import {
-  Bucket,
-  HotelCollection,
-  HotelProperties,
-} from "@/lib/types";
+import { Bucket, HotelCollection, HotelProperties } from "@/lib/types";
 import ToolRail, { LayerMode } from "./ToolRail";
 import ZoomControls from "./ZoomControls";
 import LegendFilter from "./LegendFilter";
 import PropertyCard from "./PropertyCard";
 
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-
 const TEXAS_CENTER = { longitude: -99.3, latitude: 31.3, zoom: 5.5 };
 
+// Free, keyless basemaps from CARTO (vector, CORS-enabled). No access token needed.
 const MAP_TYPES = [
-  { label: "Light", style: "mapbox://styles/mapbox/light-v11" },
-  { label: "Streets", style: "mapbox://styles/mapbox/streets-v12" },
-  { label: "Satellite", style: "mapbox://styles/mapbox/satellite-streets-v12" },
+  { label: "Light", style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" },
+  { label: "Streets", style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json" },
+  { label: "Dark", style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" },
 ] as const;
 
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
 
 // ---- Layer styles --------------------------------------------------------
 
-const clusterLayer: CircleLayer = {
+const clusterLayer: LayerProps = {
   id: "clusters",
   type: "circle",
   source: "hotels",
@@ -58,7 +52,7 @@ const clusterLayer: CircleLayer = {
   },
 };
 
-const clusterCountLayer: SymbolLayer = {
+const clusterCountLayer: LayerProps = {
   id: "cluster-count",
   type: "symbol",
   source: "hotels",
@@ -70,7 +64,7 @@ const clusterCountLayer: SymbolLayer = {
   paint: { "text-color": "#0f172a" },
 };
 
-const unclusteredLayer: CircleLayer = {
+const unclusteredLayer: LayerProps = {
   id: "unclustered-point",
   type: "circle",
   source: "hotels",
@@ -87,24 +81,14 @@ const unclusteredLayer: CircleLayer = {
       "#9aa0a6",
       "#9aa0a6",
     ],
-    "circle-radius": [
-      "interpolate",
-      ["linear"],
-      ["zoom"],
-      5,
-      3.5,
-      10,
-      6,
-      14,
-      9,
-    ],
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3.5, 10, 6, 14, 9],
     "circle-stroke-width": 1.2,
     "circle-stroke-color": "#ffffff",
     "circle-opacity": 0.95,
   },
 };
 
-const heatmapLayer: HeatmapLayer = {
+const heatmapLayer: LayerProps = {
   id: "hotels-heat",
   type: "heatmap",
   source: "hotels-heat",
@@ -209,21 +193,21 @@ export default function MapView() {
   const interactiveLayerIds =
     layerMode === "pins" ? ["clusters", "unclustered-point"] : [];
 
-  const onClick = useCallback(
-    (event: MapLayerMouseEvent) => {
-      const feature = event.features?.[0];
-      if (!feature) {
-        setSelected(null);
-        return;
-      }
-      // Cluster: zoom in to expand.
-      if (feature.layer?.id === "clusters") {
-        const clusterId = feature.properties?.cluster_id;
-        const map = mapRef.current?.getMap();
-        const src: any = map?.getSource("hotels");
-        if (src && clusterId != null) {
-          src.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
-            if (err) return;
+  const onClick = useCallback((event: MapLayerMouseEvent) => {
+    const feature = event.features?.[0];
+    if (!feature) {
+      setSelected(null);
+      return;
+    }
+    // Cluster: zoom in to expand.
+    if (feature.layer?.id === "clusters") {
+      const clusterId = feature.properties?.cluster_id;
+      const map = mapRef.current?.getMap();
+      const src: any = map?.getSource("hotels");
+      if (src && clusterId != null) {
+        // maplibre-gl v3 returns a Promise.
+        Promise.resolve(src.getClusterExpansionZoom(clusterId))
+          .then((zoom: number) => {
             map?.easeTo({
               center: (feature.geometry as GeoJSON.Point).coordinates as [
                 number,
@@ -232,60 +216,41 @@ export default function MapView() {
               zoom,
               duration: 500,
             });
-          });
-        }
-        return;
+          })
+          .catch(() => {});
       }
-      // Individual hotel: open the property card.
-      if (feature.layer?.id === "unclustered-point") {
-        setSelected(feature.properties as unknown as HotelProperties);
-        map_flyTo(mapRef, feature.geometry as GeoJSON.Point);
-      }
-    },
-    []
-  );
+      return;
+    }
+    // Individual hotel: open the property card.
+    if (feature.layer?.id === "unclustered-point") {
+      setSelected(feature.properties as unknown as HotelProperties);
+      map_flyTo(mapRef, feature.geometry as GeoJSON.Point);
+    }
+  }, []);
 
   const toggleBucket = (b: Bucket) =>
     setActiveBuckets((prev) => {
       const next = new Set(prev);
       if (next.has(b)) next.delete(b);
       else next.add(b);
-      // Never allow an empty selection — fall back to all.
-      if (next.size === 0) return new Set(ALL_BUCKETS);
+      if (next.size === 0) return new Set(ALL_BUCKETS); // never empty
       return next;
     });
-
-  if (!MAPBOX_TOKEN) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#eceff1] p-8">
-        <div className="max-w-md rounded-2xl bg-white p-6 text-center shadow-card">
-          <h1 className="text-lg font-semibold text-gray-900">
-            Mapbox token missing
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Set <code className="rounded bg-gray-100 px-1">NEXT_PUBLIC_MAPBOX_TOKEN</code>{" "}
-            in your environment (and in Vercel project settings) to render the
-            map.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="relative h-screen w-screen">
       <Map
         ref={mapRef}
-        mapboxAccessToken={MAPBOX_TOKEN}
         initialViewState={TEXAS_CENTER}
         mapStyle={MAP_TYPES[mapTypeIndex].style}
         interactiveLayerIds={interactiveLayerIds}
         onClick={onClick}
         onMove={(e) => setBearing(e.viewState.bearing)}
-        cursor="auto"
-        attributionControl={true}
+        attributionControl={false}
         style={{ width: "100%", height: "100%" }}
       >
+        <AttributionControl position="top-left" compact />
+
         {layerMode === "pins" && filtered && (
           <Source
             id="hotels"

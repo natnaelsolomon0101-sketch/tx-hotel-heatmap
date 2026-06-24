@@ -15,17 +15,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Mapbox GL styles are imported in the Map component. A few overrides to match a
-   clean CRE mapping tool: hide the default Mapbox attribution clutter visually but
-   keep it accessible. */
-.mapboxgl-ctrl-logo {
-  opacity: 0.5;
-}
-
-.mapboxgl-ctrl-bottom-right {
-  display: none; /* we render our own zoom/compass controls */
-}
-
-.mapboxgl-popup {
+/* MapLibre GL styles are imported in the Map component. A few overrides to match
+   a clean CRE mapping tool. Attribution stays visible (top-left, compact) to
+   respect the OpenStreetMap / CARTO basemap license. */
+.maplibregl-popup {
   display: none; /* property details render in our own floating card */
+}
+
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  border-radius: 9999px;
 }

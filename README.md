@@ -3,21 +3,24 @@
 A full-screen CRE mapping tool that plots Texas hotels by **RevPAR** (revenue per
 available room), built from Texas Comptroller hotel-occupancy-tax data. Hotels are
 bucketed red / yellow / gray by RevPAR percentile and rendered as clustered colored
-pins or a true Mapbox density heatmap.
+pins or a true MapLibre density heatmap.
 
-![stack](https://img.shields.io/badge/Next.js-14-black) ![stack](https://img.shields.io/badge/react--map--gl-7-blue) ![stack](https://img.shields.io/badge/Mapbox%20GL-3-green)
+**No map token required** — the map renders with MapLibre GL + free CARTO basemaps,
+so it works out of the box with no account or API key.
+
+![stack](https://img.shields.io/badge/Next.js-14-black) ![stack](https://img.shields.io/badge/react--map--gl-7-blue) ![stack](https://img.shields.io/badge/MapLibre%20GL-3-green)
 
 ## Features
 
-- **Full-screen Mapbox GL map** centered on Texas (`light-v11`, with Streets &
-  Satellite map types).
+- **Full-screen, keyless map** centered on Texas via MapLibre GL + free CARTO
+  basemaps (Light / Streets / Dark map types).
 - **Colored markers by RevPAR bucket** — red (top third), yellow (middle third),
   gray (bottom third + missing data). Points cluster when zoomed out and expand
   on click.
 - **Property card** — click any hotel for a CRE-style card: photo, name, address,
   `{rooms} Rooms · Hospitality`, RevPAR, ADR, and occupancy.
 - **Heatmap layer** — the left-rail *Layers* button toggles between colored pins
-  and a Mapbox density heatmap weighted by RevPAR.
+  and a MapLibre density heatmap weighted by RevPAR.
 - **Filter + legend** — the legend doubles as a filter: tap a bucket to show only
   red / yellow / gray hotels.
 - **Tool rail** — Location (recenter), Polygon, Radius, Layers, Map type. Zoom and
@@ -27,21 +30,19 @@ pins or a true Mapbox density heatmap.
 
 ```bash
 npm install
-cp .env.local.example .env.local   # then fill in your Mapbox token(s)
-npm run build-data                 # generates public/hotels.geojson
-npm run dev                        # http://localhost:3000
+npm run build-data   # generates public/hotels.geojson (already committed)
+npm run dev          # http://localhost:3000 — no token needed
 ```
 
 ## Environment variables
 
+The **map needs no token** — it renders with MapLibre GL + free CARTO basemaps.
+
+The only (optional) variable is for the data pipeline:
+
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | browser (build + runtime) | Renders the Mapbox GL map. Must be a **public** token (`pk.…`). |
-| `MAPBOX_GEOCODING_TOKEN` | `build-data` script only | Token for the Mapbox Geocoding API. Can be the same public token. |
-
-> **On Vercel:** add both as Project → Settings → Environment Variables.
-> `NEXT_PUBLIC_MAPBOX_TOKEN` must be set for **Production** (and Preview) so the
-> deployed map renders. Without it the app shows a "Mapbox token missing" notice.
+| `MAPBOX_GEOCODING_TOKEN` | `build-data` script only | *Optional.* Use the Mapbox Geocoding API instead of the free, no-key US Census geocoder (higher hit rate). Leave unset to use Census. |
 
 ## Data pipeline
 
@@ -103,11 +104,9 @@ npm run build-data -- --no-geocode        # use the geocache only, skip API call
 ## Deploy (Vercel)
 
 This repo is set up for Vercel auto-deploy: push to `main` and Vercel builds and
-deploys. Before the first deploy, add `NEXT_PUBLIC_MAPBOX_TOKEN` (and
-`MAPBOX_GEOCODING_TOKEN` if you'll regenerate data on Vercel) under the project's
-Environment Variables.
+deploys. No environment variables are required for the map to render.
 
 ## Tech
 
-Next.js 14 (App Router, TypeScript) · Tailwind CSS · react-map-gl + mapbox-gl ·
-`tsx` for the data pipeline.
+Next.js 14 (App Router, TypeScript) · Tailwind CSS · react-map-gl + maplibre-gl ·
+free CARTO basemaps · `tsx` for the data pipeline.

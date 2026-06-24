@@ -32,3 +32,4 @@ yarn-error.log*
 # The generated public/hotels.geojson IS committed so Vercel can render without a build step.
 /data/hotels.csv
 /data/geocache.json
+.vercel
