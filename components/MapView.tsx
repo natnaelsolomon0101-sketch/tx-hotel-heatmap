@@ -353,7 +353,38 @@ function MarkersLayer({
     );
 
     if (clusters.length > 0) {
-      // Cluster bubbles: a filled circle scaled by member count.
+      // Area-proportional bubble radius: sqrt(count) so the *area* of the
+      // bubble reads as magnitude (doubling area for ~2x members), clamped to a
+      // calm pixel band. `clusterRadius * 0.32` sets the floor; the sqrt term
+      // grows smoothly without the jumpiness of log2.
+      const clusterRadiusPx = (c: Cluster) =>
+        CLUSTERING.clusterRadius * 0.32 + Math.sqrt(c.count) * 2.4;
+
+      // Soft outer halo: a larger, very-low-alpha disc behind each bubble that
+      // separates it from the basemap (Mapbox/Google-style glow). Unstroked,
+      // not pickable, so clicks pass through to the bubble below it.
+      layers.push(
+        new ScatterplotLayer<Cluster>({
+          id: "cluster-halo",
+          data: clusters,
+          getPosition: (c) => [c.lng, c.lat],
+          getFillColor: (c) => {
+            const [r, g, bl] = BUCKET_RGBA[c.bucket];
+            return [r, g, bl, 38];
+          },
+          getRadius: (c) => clusterRadiusPx(c) + 6,
+          radiusUnits: "pixels",
+          radiusMinPixels: 22,
+          radiusMaxPixels: 54,
+          stroked: false,
+          pickable: false,
+          updateTriggers: { getFillColor: clusters, getRadius: clusters },
+        })
+      );
+
+      // Cluster bubbles: a soft, slightly translucent filled circle with a
+      // crisp white ring. Translucent fill lets the basemap read through a
+      // touch; per-bucket color still signals the RevPAR tier.
       layers.push(
         new ScatterplotLayer<Cluster>({
           id: "cluster-bubbles",
@@ -361,19 +392,16 @@ function MarkersLayer({
           getPosition: (c) => [c.lng, c.lat],
           getFillColor: (c) => {
             const [r, g, bl] = BUCKET_RGBA[c.bucket];
-            return [r, g, bl, 210];
+            return [r, g, bl, 175];
           },
-          // Larger count → larger bubble, clamped to a sane pixel band.
-          getRadius: (c) =>
-            CLUSTERING.clusterRadius * 0.5 +
-            Math.min(Math.log2(c.count + 1) * 4, 22),
+          getRadius: clusterRadiusPx,
           radiusUnits: "pixels",
-          radiusMinPixels: 14,
-          radiusMaxPixels: 44,
+          radiusMinPixels: 16,
+          radiusMaxPixels: 46,
           stroked: true,
           lineWidthUnits: "pixels",
-          getLineWidth: 2,
-          getLineColor: [255, 255, 255, 240],
+          getLineWidth: 1.5,
+          getLineColor: [255, 255, 255, 235],
           pickable: true,
           autoHighlight: true,
           highlightColor: [255, 255, 255, 60],
@@ -387,7 +415,9 @@ function MarkersLayer({
         })
       );
 
-      // Count labels centered on each bubble.
+      // Count labels centered on each bubble. SDF font lets us draw a dark
+      // outline around white glyphs so the count stays legible on any bucket
+      // color. Font size scales modestly with the bubble radius.
       layers.push(
         new TextLayer<Cluster>({
           id: "cluster-labels",
@@ -395,15 +425,20 @@ function MarkersLayer({
           getPosition: (c) => [c.lng, c.lat],
           getText: (c) =>
             c.count >= 1000 ? `${Math.round(c.count / 100) / 10}k` : `${c.count}`,
-          getSize: 12,
+          getSize: (c) =>
+            Math.max(11, Math.min(clusterRadiusPx(c) * 0.62, 20)),
           sizeUnits: "pixels",
           getColor: [255, 255, 255, 255],
-          fontWeight: 700,
+          fontFamily: "Inter, system-ui, sans-serif",
+          fontWeight: 600,
+          fontSettings: { sdf: true },
+          outlineWidth: 2,
+          outlineColor: [17, 24, 39, 220],
           getTextAnchor: "middle",
           getAlignmentBaseline: "center",
           // Labels are decoration; clicks fall through to the bubble layer.
           pickable: false,
-          updateTriggers: { getText: clusters },
+          updateTriggers: { getText: clusters, getSize: clusters },
         })
       );
     }

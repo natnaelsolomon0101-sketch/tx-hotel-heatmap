@@ -1,5 +1,18 @@
 export type Bucket = "red" | "yellow" | "gray";
 
+/**
+ * One point on a hotel's 2023→present RevPAR trend (see scripts/build-history.mjs).
+ * `revpar` is an average-month RevPAR on the same basis as the map's RevPAR, so
+ * the latest point lines up with `HotelProperties.revpar`.
+ */
+export interface TrendPoint {
+  q: string; // "2023" | "2024Q2" … "2026Q2"
+  revenue: number; // period revenue ($); full-year for the 2023 point
+  revpar: number | null;
+  annual?: boolean; // 2023 baseline = full-year revenue
+  partial?: boolean; // 2026Q2 = partial quarter (Apr+May only)
+}
+
 /** Properties carried on each hotel feature in public/hotels.geojson. */
 export interface HotelProperties {
   name: string;
@@ -15,6 +28,10 @@ export interface HotelProperties {
   bucket: Bucket;
   photo: string | null;
   flagged: boolean; // true when key inputs were missing
+  // 2023→present history (added by scripts/build-history.mjs; may be absent on old data).
+  history?: TrendPoint[];
+  t12Revenue?: number | null; // trailing 12mo revenue (last 4 complete quarters)
+  t12Revpar?: number | null; // trailing 12mo average monthly RevPAR
 }
 
 export type HotelFeature = GeoJSON.Feature<GeoJSON.Point, HotelProperties>;

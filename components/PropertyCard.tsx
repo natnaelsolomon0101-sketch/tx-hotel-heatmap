@@ -5,6 +5,7 @@ import { BUCKET_COLORS, BUCKET_LABELS, HotelProperties } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { HotelPercentiles } from "@/lib/percentile";
 import PercentileBar from "./PercentileBar";
+import RevparTrend from "./RevparTrend";
 import { BookmarkIcon, CloseIcon } from "./icons";
 
 type PropertyCardProps = {
@@ -323,8 +324,14 @@ export default function PropertyCard({
         </div>
 
         <div className="mt-3 border-t border-gray-100 pt-3">
-          <Stat label="Revenue" value={fmtMoney(hotel.revenue)} />
+          <Stat label="Revenue (latest mo)" value={fmtMoney(hotel.revenue)} />
         </div>
+
+        <RevparTrend
+          history={hotel.history}
+          t12Revenue={hotel.t12Revenue}
+          t12Revpar={hotel.t12Revpar}
+        />
 
         {percentiles && (
           <div className="mt-3 space-y-2.5 border-t border-gray-100 pt-3">
