@@ -30,6 +30,9 @@ import fs from "node:fs";
 
 const PERIOD_DIR = "data/periods";
 const GEOJSON = "public/hotels.geojson";
+// Trend/T12 live in a separate file loaded on-demand (only when a card opens),
+// so the map's initial geojson stays lean. Keyed by the feature's `id`.
+const HISTORY = "public/hotel-history.json";
 
 // Quarter axis, oldest → newest. 2023 is a single annual baseline point.
 const QUARTERS = [
@@ -100,17 +103,24 @@ for (const [file, q] of Object.entries(MONTH_TO_Q)) {
 
 console.log("Hotels with any historical revenue:", revByQuarter.size.toLocaleString());
 
-// Enrich geojson.
+// Build a lean geojson (base fields + a stable `id`) and a SEPARATE history
+// file keyed by that id, so the map never downloads the trend data up front.
 const geo = JSON.parse(fs.readFileSync(GEOJSON, "utf8"));
 let anyHist = 0, fullT12 = 0;
 const round = (n) => Math.round(n);
+const historyOut = {}; // id -> { history, t12Revenue, t12Revpar }
 
-for (const f of geo.features) {
+geo.features.forEach((f, i) => {
   const p = f.properties;
+  p.id = i;
+  // Drop any trend fields baked in by an earlier run — they live in HISTORY now.
+  delete p.history;
+  delete p.t12Revenue;
+  delete p.t12Revpar;
+
   const m = revByQuarter.get(keyOf(p.address, p.city, p.zip));
   const rooms = Number(p.rooms) || 0;
-
-  if (!m) { p.history = []; p.t12Revenue = null; p.t12Revpar = null; continue; }
+  if (!m) return;
 
   // Trend: one point per quarter that reported, RevPAR as a monthly run-rate
   // (period revenue / rooms / months-in-period) so all points are comparable.
@@ -124,24 +134,26 @@ for (const f of geo.features) {
     if (q === "2026Q2") pt.partial = true;
     history.push(pt);
   }
-  p.history = history;
 
   // T12 — only if all four complete quarters are present.
   const hasAll = T12_QUARTERS.every((q) => m.has(q));
+  let t12Revenue = null, t12Revpar = null;
   if (hasAll) {
     const t12 = T12_QUARTERS.reduce((s, q) => s + m.get(q), 0);
-    p.t12Revenue = round(t12);
+    t12Revenue = round(t12);
     // Trailing-12mo average monthly RevPAR, same basis as the map / trend line.
-    p.t12Revpar = rooms > 0 ? Math.round((t12 / (rooms * REVPAR_DAYS * 12)) * 100) / 100 : null;
+    t12Revpar = rooms > 0 ? Math.round((t12 / (rooms * REVPAR_DAYS * 12)) * 100) / 100 : null;
     fullT12++;
-  } else {
-    p.t12Revenue = null;
-    p.t12Revpar = null;
   }
-  if (history.length) anyHist++;
-}
+
+  if (history.length || t12Revenue != null) {
+    historyOut[i] = { history, t12Revenue, t12Revpar };
+    if (history.length) anyHist++;
+  }
+});
 
 fs.writeFileSync(GEOJSON, JSON.stringify(geo));
+fs.writeFileSync(HISTORY, JSON.stringify(historyOut));
 
 const n = geo.features.length;
 const pct = (x) => `${((100 * x) / n).toFixed(1)}%`;
@@ -149,4 +161,5 @@ console.log("\n=== enrichment report ===");
 console.log(`features:               ${n.toLocaleString()}`);
 console.log(`with any trend history: ${anyHist.toLocaleString()} (${pct(anyHist)})`);
 console.log(`with full T12:          ${fullT12.toLocaleString()} (${pct(fullT12)})`);
-console.log(`geojson written:        ${GEOJSON} (${(fs.statSync(GEOJSON).size / 1e6).toFixed(1)} MB)`);
+console.log(`geojson (lean):         ${GEOJSON} (${(fs.statSync(GEOJSON).size / 1e6).toFixed(1)} MB)`);
+console.log(`history (on-demand):    ${HISTORY} (${(fs.statSync(HISTORY).size / 1e6).toFixed(1)} MB)`);

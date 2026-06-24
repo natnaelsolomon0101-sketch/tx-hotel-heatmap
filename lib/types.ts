@@ -28,10 +28,17 @@ export interface HotelProperties {
   bucket: Bucket;
   photo: string | null;
   flagged: boolean; // true when key inputs were missing
-  // 2023→present history (added by scripts/build-history.mjs; may be absent on old data).
-  history?: TrendPoint[];
-  t12Revenue?: number | null; // trailing 12mo revenue (last 4 complete quarters)
-  t12Revpar?: number | null; // trailing 12mo average monthly RevPAR
+  id?: number; // stable index; joins to public/hotel-history.json
+}
+
+/**
+ * Trend + T12 for one hotel. Lives in public/hotel-history.json (keyed by
+ * HotelProperties.id) and is fetched lazily so the map's geojson stays lean.
+ */
+export interface HotelHistory {
+  history: TrendPoint[];
+  t12Revenue: number | null;
+  t12Revpar: number | null;
 }
 
 export type HotelFeature = GeoJSON.Feature<GeoJSON.Point, HotelProperties>;

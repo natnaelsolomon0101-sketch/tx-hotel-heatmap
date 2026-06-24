@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bucket, BUCKET_LABELS, HotelProperties } from "@/lib/types";
+import { Bucket, BUCKET_LABELS, HotelHistory, HotelProperties } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { HotelPercentiles } from "@/lib/percentile";
 import PercentileBar from "./PercentileBar";
@@ -10,6 +10,8 @@ import { BookmarkIcon, CloseIcon } from "./icons";
 
 type PropertyCardProps = {
   hotel: HotelProperties;
+  /** Trend + T12, fetched lazily by MapView (undefined until it loads). */
+  history?: HotelHistory;
   onClose: () => void;
   /** Statewide + in-city RevPAR percentiles, computed from the full dataset. */
   percentiles?: HotelPercentiles | null;
@@ -126,6 +128,7 @@ function DirectionsIcon() {
 
 export default function PropertyCard({
   hotel,
+  history: hist,
   onClose,
   percentiles,
   streetViewUrl,
@@ -387,9 +390,9 @@ export default function PropertyCard({
         </div>
 
         <RevparTrend
-          history={hotel.history}
-          t12Revenue={hotel.t12Revenue}
-          t12Revpar={hotel.t12Revpar}
+          history={hist?.history}
+          t12Revenue={hist?.t12Revenue}
+          t12Revpar={hist?.t12Revpar}
         />
 
         {percentiles && (

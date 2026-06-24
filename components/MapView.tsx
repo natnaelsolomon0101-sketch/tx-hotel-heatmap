@@ -14,6 +14,7 @@ import type { Layer } from "@deck.gl/core";
 import {
   Bucket,
   HotelCollection,
+  HotelHistory,
   HotelFeature,
 } from "@/lib/types";
 import ToolRail, { LayerMode } from "./ToolRail";
@@ -617,6 +618,24 @@ export default function MapView() {
 
   const [data, setData] = useState<HotelCollection | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
+  // Trend/T12 live in a separate file so the map's geojson stays lean; fetched
+  // lazily after mount and keyed by feature id. Null until it resolves.
+  const [historyData, setHistoryData] = useState<Record<
+    number,
+    HotelHistory
+  > | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/hotel-history.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((h) => {
+        if (!cancelled) setHistoryData(h);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // When the most recent successful /hotels.geojson fetch completed. Drives the
   // staleness label in the header. null until the first load resolves.
   const [lastFetchTime, setLastFetchTime] = useState<number | null>(null);
@@ -1597,6 +1616,11 @@ export default function MapView() {
       {selected && !svOpen && (
         <PropertyCard
           hotel={selected.properties}
+          history={
+            selected.properties.id != null
+              ? historyData?.[selected.properties.id]
+              : undefined
+          }
           onClose={() => setSelected(null)}
           isMobile={isMobile}
           percentiles={getHotelPercentiles(
