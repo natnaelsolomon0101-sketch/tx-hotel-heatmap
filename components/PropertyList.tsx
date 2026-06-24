@@ -26,6 +26,7 @@ type PropertyListProps = {
   sort: SortKey;
   onSort: (s: SortKey) => void;
   onExport: () => void;
+  onExportXls?: () => void;
   searchInputRef?: RefObject<HTMLInputElement>;
   onClear?: () => void;
   hasFilters?: boolean;
@@ -69,6 +70,7 @@ export default function PropertyList({
   sort,
   onSort,
   onExport,
+  onExportXls,
   searchInputRef,
   onClear,
   hasFilters,
@@ -136,6 +138,17 @@ export default function PropertyList({
             </svg>
             CSV
           </button>
+          {onExportXls && (
+            <button
+              type="button"
+              onClick={onExportXls}
+              disabled={total === 0}
+              title="Export current list to Excel"
+              className="flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            >
+              XLS
+            </button>
+          )}
         </div>
       </div>
 

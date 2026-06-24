@@ -1,6 +1,7 @@
 "use client";
 
 import { Bucket, BUCKET_COLORS } from "@/lib/types";
+import { fmtMoney } from "@/lib/stats";
 
 type LegendFilterProps = {
   active: Set<Bucket>;
@@ -8,6 +9,8 @@ type LegendFilterProps = {
   onToggle: (b: Bucket) => void;
   onReset: () => void;
   layerMode: "pins" | "heatmap";
+  /** [yellow≥, red≥] RevPAR dollar cutoffs, shown next to each tier. */
+  revparCutoffs?: [number, number];
 };
 
 const ROWS: { bucket: Bucket; title: string; sub: string }[] = [
@@ -22,8 +25,15 @@ export default function LegendFilter({
   onToggle,
   onReset,
   layerMode,
+  revparCutoffs,
 }: LegendFilterProps) {
   const allOn = active.size === 3;
+  // Per-tier dollar hint: red ≥ cutoffs[1], yellow ≥ cutoffs[0].
+  const tierCutoff: Record<Bucket, string | null> = {
+    red: revparCutoffs ? `${fmtMoney(revparCutoffs[1])}+` : null,
+    yellow: revparCutoffs ? `${fmtMoney(revparCutoffs[0])}+` : null,
+    gray: null,
+  };
   return (
     <div className="shrink-0 rounded-2xl bg-white/95 p-2.5 shadow-card ring-1 ring-black/5 backdrop-blur md:p-3">
       <div className="mb-1.5 flex items-center justify-between md:mb-2">
@@ -94,6 +104,11 @@ export default function LegendFilter({
               <span className="flex-1">
                 <span className="block text-sm font-medium text-gray-800">
                   {title}
+                  {tierCutoff[bucket] && (
+                    <span className="ml-1 text-[11px] font-normal text-gray-400">
+                      {tierCutoff[bucket]}
+                    </span>
+                  )}
                 </span>
                 <span className="block text-[11px] text-gray-500">{sub}</span>
               </span>

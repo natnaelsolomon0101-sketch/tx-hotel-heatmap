@@ -42,6 +42,9 @@ import ShareButton from "./ShareButton";
 import { useWatchlist } from "@/lib/useWatchlist";
 import RollupPanel from "./RollupPanel";
 import { aggregateRollup, RollupDim } from "@/lib/rollups";
+import BrandFilter from "./BrandFilter";
+import { BrandKey, detectBrand, countBrands } from "@/lib/brands";
+import { downloadXls } from "@/lib/xls";
 import {
   LatLng,
   pointInPolygon,
@@ -299,6 +302,7 @@ export default function MapView() {
   const watchlist = useWatchlist();
   const [revparRange, setRevparRange] = useState<Range | null>(null);
   const [roomsRange, setRoomsRange] = useState<Range | null>(null);
+  const [activeBrands, setActiveBrands] = useState<Set<BrandKey>>(new Set());
   const [helpOpen, setHelpOpen] = useState(false);
   const [compare, setCompare] = useState<HotelFeature[]>([]);
   const COMPARE_MAX = 3;
@@ -400,14 +404,16 @@ export default function MapView() {
   const filtered = useMemo<HotelFeature[]>(() => {
     if (!data) return [];
     const allBuckets = activeBuckets.size === ALL_BUCKETS.length;
+    const brandActive = activeBrands.size > 0;
     const [rpLo, rpHi] = revparVal;
     const [rmLo, rmHi] = roomsVal;
     const rpActive = rpLo > ranges.revpar[0] || rpHi < ranges.revpar[1];
     const rmActive = rmLo > ranges.rooms[0] || rmHi < ranges.rooms[1];
-    if (allBuckets && !rpActive && !rmActive) return data.features;
+    if (allBuckets && !brandActive && !rpActive && !rmActive) return data.features;
     return data.features.filter((f) => {
       const p = f.properties;
       if (!allBuckets && !activeBuckets.has(p.bucket)) return false;
+      if (brandActive && !activeBrands.has(detectBrand(p.name))) return false;
       if (rpActive) {
         if (p.revpar == null) return false;
         if (p.revpar < rpLo || p.revpar > rpHi) return false;
@@ -418,7 +424,13 @@ export default function MapView() {
       }
       return true;
     });
-  }, [data, activeBuckets, revparVal, roomsVal, ranges]);
+  }, [data, activeBuckets, activeBrands, revparVal, roomsVal, ranges]);
+
+  // Data-driven brand counts (for the brand filter control).
+  const brandCounts = useMemo(
+    () => countBrands(data?.features ?? []),
+    [data]
+  );
 
   // An active, finished area selection (closed polygon OR placed circle).
   // When set, it overrides the viewport/search scope for stats + list.
@@ -625,6 +637,7 @@ export default function MapView() {
 
   const resetAll = useCallback(() => {
     setActiveBuckets(new Set(ALL_BUCKETS));
+    setActiveBrands(new Set());
     setRevparRange(ranges.revpar);
     setRoomsRange(ranges.rooms);
     setQuery("");
@@ -685,6 +698,7 @@ export default function MapView() {
 
   const hasFilters =
     activeBuckets.size < ALL_BUCKETS.length ||
+    activeBrands.size > 0 ||
     revparVal[0] > ranges.revpar[0] ||
     revparVal[1] < ranges.revpar[1] ||
     roomsVal[0] > ranges.rooms[0] ||
@@ -858,6 +872,14 @@ export default function MapView() {
           onToggle={toggleBucket}
           onReset={() => setActiveBuckets(new Set(ALL_BUCKETS))}
           layerMode={layerMode}
+          revparCutoffs={
+            sortedRevpars.length
+              ? [
+                  sortedRevpars[Math.floor(sortedRevpars.length / 3)],
+                  sortedRevpars[Math.floor((sortedRevpars.length * 2) / 3)],
+                ]
+              : undefined
+          }
         />
         <div className="hidden md:block">
           <RangeFilters
@@ -873,6 +895,12 @@ export default function MapView() {
               setRevparRange(ranges.revpar);
               setRoomsRange(ranges.rooms);
             }}
+          />
+          <BrandFilter
+            selected={activeBrands}
+            onChange={setActiveBrands}
+            counts={brandCounts}
+            onReset={() => setActiveBrands(new Set())}
           />
         </div>
         {areaSelection ? (
@@ -919,6 +947,7 @@ export default function MapView() {
                 sort={sort}
                 onSort={setSort}
                 onExport={exportCsv}
+                onExportXls={() => downloadXls(inScope, `tx-hotels-${inScope.length}.xls`)}
                 searchInputRef={searchInputRef}
                 onClear={resetAll}
                 hasFilters={hasFilters}
@@ -951,6 +980,7 @@ export default function MapView() {
                 stats={stats}
                 marketRows={inScopeMarkets}
                 onSelectMarket={selectMarket}
+                onSelectHotel={flyToFeature}
               />
             ) : (
               <WatchlistView
