@@ -5,9 +5,22 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "TX Hotel Heatmap",
+  title: "TX Hotel RevPAR Intelligence",
   description:
-    "RevPAR heatmap of Texas hotels, built from Texas Comptroller hotel occupancy tax data.",
+    "Interactive RevPAR map of 10,000+ Texas hotels, built from Texas Comptroller hotel occupancy tax data. Filter, search, and export by market and performance.",
+  applicationName: "TX Hotel RevPAR Intelligence",
+  openGraph: {
+    title: "TX Hotel RevPAR Intelligence",
+    description:
+      "Interactive RevPAR map of 10,000+ Texas hotels — filter, search, and export by market and performance.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TX Hotel RevPAR Intelligence",
+    description:
+      "Interactive RevPAR map of 10,000+ Texas hotels — filter, search, and export.",
+  },
 };
 
 export const viewport: Viewport = {

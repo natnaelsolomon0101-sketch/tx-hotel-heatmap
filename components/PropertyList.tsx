@@ -2,6 +2,15 @@
 
 import { BUCKET_COLORS, HotelFeature } from "@/lib/types";
 
+export type SortKey = "revpar-desc" | "revpar-asc" | "rooms-desc" | "name-asc";
+
+const SORT_LABELS: Record<SortKey, string> = {
+  "revpar-desc": "RevPAR: high → low",
+  "revpar-asc": "RevPAR: low → high",
+  "rooms-desc": "Rooms: most first",
+  "name-asc": "Name: A → Z",
+};
+
 type PropertyListProps = {
   rows: HotelFeature[];
   total: number;
@@ -10,6 +19,9 @@ type PropertyListProps = {
   onQuery: (q: string) => void;
   onSelect: (f: HotelFeature) => void;
   selectedKey: string | null;
+  sort: SortKey;
+  onSort: (s: SortKey) => void;
+  onExport: () => void;
 };
 
 const titleCase = (s: string) =>
@@ -37,6 +49,9 @@ export default function PropertyList({
   onQuery,
   onSelect,
   selectedKey,
+  sort,
+  onSort,
+  onExport,
 }: PropertyListProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white/95 shadow-card ring-1 ring-black/5 backdrop-blur">
@@ -68,9 +83,32 @@ export default function PropertyList({
             </button>
           )}
         </div>
-        <p className="mt-2 text-[11px] text-gray-400">
-          Sorted by RevPAR — top performers first.
-        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            value={sort}
+            onChange={(e) => onSort(e.target.value as SortKey)}
+            aria-label="Sort properties"
+            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 outline-none focus:border-gray-400"
+          >
+            {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+              <option key={k} value={k}>
+                {SORT_LABELS[k]}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onExport}
+            disabled={total === 0}
+            title="Export current list to CSV"
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+            </svg>
+            CSV
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

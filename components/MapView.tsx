@@ -20,7 +20,9 @@ import ToolRail, { LayerMode } from "./ToolRail";
 import ZoomControls from "./ZoomControls";
 import LegendFilter from "./LegendFilter";
 import PropertyCard from "./PropertyCard";
-import PropertyList, { featureKey } from "./PropertyList";
+import PropertyList, { featureKey, SortKey } from "./PropertyList";
+import HeaderBar from "./HeaderBar";
+import { computeStats } from "@/lib/stats";
 
 const GOOGLE_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -28,6 +30,15 @@ const TEXAS_CENTER = { lat: 31.3, lng: -99.3 };
 const TEXAS_ZOOM = 5.5;
 const LIST_LIMIT = 200;
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
+const DATA_PERIOD = "May 2026";
+
+const SORTERS: Record<SortKey, (a: HotelFeature, b: HotelFeature) => number> = {
+  "revpar-desc": (a, b) => (b.properties.revpar ?? -1) - (a.properties.revpar ?? -1),
+  "revpar-asc": (a, b) =>
+    (a.properties.revpar ?? Infinity) - (b.properties.revpar ?? Infinity),
+  "rooms-desc": (a, b) => (b.properties.rooms ?? -1) - (a.properties.rooms ?? -1),
+  "name-asc": (a, b) => a.properties.name.localeCompare(b.properties.name),
+};
 
 const MAP_TYPES = [
   { label: "Roadmap", id: "roadmap" },
@@ -226,6 +237,7 @@ export default function MapView() {
     [number, number, number, number] | null
   >(null);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("revpar-desc");
 
   const controls = useRef<{
     zoomIn: () => void;
@@ -263,7 +275,8 @@ export default function MapView() {
     return data.features.filter((f) => activeBuckets.has(f.properties.bucket));
   }, [data, activeBuckets]);
 
-  const listData = useMemo(() => {
+  // In-scope set: bucket filter + (search text OR current viewport).
+  const inScope = useMemo(() => {
     const q = query.trim().toLowerCase();
     let feats = filtered;
     if (q) {
@@ -279,11 +292,57 @@ export default function MapView() {
         return lng >= w && lng <= e && lat >= s && lat <= n;
       });
     }
-    const sorted = [...feats].sort(
-      (a, b) => (b.properties.revpar ?? -1) - (a.properties.revpar ?? -1)
-    );
-    return { rows: sorted.slice(0, LIST_LIMIT), total: sorted.length };
-  }, [filtered, bounds, query]);
+    return [...feats].sort(SORTERS[sort]);
+  }, [filtered, bounds, query, sort]);
+
+  const listData = useMemo(
+    () => ({ rows: inScope.slice(0, LIST_LIMIT), total: inScope.length }),
+    [inScope]
+  );
+
+  const stats = useMemo(() => computeStats(inScope), [inScope]);
+
+  const exportCsv = useCallback(() => {
+    const header = [
+      "name",
+      "address",
+      "city",
+      "state",
+      "zip",
+      "rooms",
+      "revpar",
+      "adr",
+      "occupancy",
+      "revenue",
+      "bucket",
+      "lng",
+      "lat",
+    ];
+    const esc = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [header.join(",")];
+    for (const f of inScope) {
+      const p = f.properties;
+      const [lng, lat] = f.geometry.coordinates;
+      lines.push(
+        [
+          p.name, p.address, p.city, p.state, p.zip, p.rooms, p.revpar,
+          p.adr, p.occupancy, p.revenue, p.bucket, lng, lat,
+        ]
+          .map(esc)
+          .join(",")
+      );
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tx-hotels-${inScope.length}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [inScope]);
 
   const flyToFeature = useCallback((f: HotelFeature) => {
     setSelected(f);
@@ -350,6 +409,8 @@ export default function MapView() {
         </Map>
       </APIProvider>
 
+      <HeaderBar stats={stats} period={DATA_PERIOD} />
+
       <ToolRail
         layerMode={layerMode}
         mapTypeLabel={MAP_TYPES[mapTypeIndex].label}
@@ -366,7 +427,7 @@ export default function MapView() {
       <div
         className="absolute z-20 flex flex-col gap-2
           inset-x-2 bottom-2 max-h-[52vh]
-          md:inset-x-auto md:left-auto md:right-4 md:top-4 md:bottom-4 md:w-80 md:max-h-none md:gap-3"
+          md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3"
       >
         <LegendFilter
           active={activeBuckets}
@@ -383,6 +444,9 @@ export default function MapView() {
           onQuery={setQuery}
           onSelect={flyToFeature}
           selectedKey={selectedKey}
+          sort={sort}
+          onSort={setSort}
+          onExport={exportCsv}
         />
       </div>
 
