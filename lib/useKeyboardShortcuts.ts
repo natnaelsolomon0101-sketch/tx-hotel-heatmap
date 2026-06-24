@@ -8,6 +8,7 @@ type ShortcutHandlers = {
   onRecenter: () => void;
   onEscape: () => void;
   onToggleHelp: () => void;
+  onClearAll?: () => void;
 };
 
 // Returns true when the event originated from a field where typing should
@@ -22,14 +23,33 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
-  const { onSearch, onToggleLayers, onRecenter, onEscape, onToggleHelp } =
-    handlers;
+  const {
+    onSearch,
+    onToggleLayers,
+    onRecenter,
+    onEscape,
+    onToggleHelp,
+    onClearAll,
+  } = handlers;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // Escape always fires (even from inputs) so it can blur/dismiss.
       if (e.key === "Escape") {
         onEscape();
+        return;
+      }
+
+      // Clear-all filters: Alt+R. Fires even with the Alt modifier held, but
+      // not while typing in a field. Avoids browser defaults (Ctrl+R reloads).
+      if (
+        onClearAll &&
+        e.altKey &&
+        (e.code === "KeyR" || e.key === "r" || e.key === "R")
+      ) {
+        if (isTypingTarget(e.target)) return;
+        e.preventDefault();
+        onClearAll();
         return;
       }
 
@@ -63,7 +83,7 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onSearch, onToggleLayers, onRecenter, onEscape, onToggleHelp]);
+  }, [onSearch, onToggleLayers, onRecenter, onEscape, onToggleHelp, onClearAll]);
 }
 
 export default useKeyboardShortcuts;

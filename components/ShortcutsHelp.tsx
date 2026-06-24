@@ -11,6 +11,7 @@ const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ["/"], label: "Focus search" },
   { keys: ["L"], label: "Toggle pins / heatmap" },
   { keys: ["R"], label: "Recenter on Texas" },
+  { keys: ["Alt", "R"], label: "Clear all filters" },
   { keys: ["?"], label: "Toggle this help" },
   { keys: ["Esc"], label: "Close panels / clear selection" },
 ];

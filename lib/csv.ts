@@ -1,4 +1,5 @@
 import { HotelFeature } from "./types";
+import { MarketRow } from "./markets";
 
 const CSV_HEADER = [
   "name",
@@ -53,7 +54,59 @@ export function buildCsv(features: HotelFeature[]): string {
 
 /** Trigger a browser download of `features` as a CSV file. */
 export function downloadCsv(features: HotelFeature[], filename: string): void {
-  const blob = new Blob([buildCsv(features)], { type: "text/csv" });
+  triggerCsvDownload(buildCsv(features), filename);
+}
+
+const MARKET_CSV_HEADER = [
+  "City",
+  "Hotels",
+  "Avg RevPAR",
+  "Median RevPAR",
+  "Total Revenue",
+  "Top Hotel",
+] as const;
+
+// MarketRow does not carry per-market revenue totals or a top-hotel name, so
+// those columns may be supplied via these optional fields when a caller has
+// computed them; otherwise they serialize as blank cells.
+type MarketExportRow = MarketRow & {
+  totalRevenue?: number | null;
+  topHotel?: string | null;
+};
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Build a market-aggregate CSV: one row per market with City, Hotels,
+ *  Avg RevPAR, Median RevPAR, Total Revenue, and Top Hotel columns. Mirrors the
+ *  per-hotel CSV serialization but over MarketRow aggregates. */
+export function buildMarketsCsv(rows: MarketExportRow[]): string {
+  const lines = [MARKET_CSV_HEADER.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        r.city,
+        r.count,
+        round2(r.avgRevpar),
+        round2(r.medianRevpar),
+        r.totalRevenue == null ? "" : round2(r.totalRevenue),
+        r.topHotel ?? "",
+      ]
+        .map(esc)
+        .join(",")
+    );
+  }
+  return lines.join("\n");
+}
+
+/** Trigger a browser download of market aggregates as a CSV file named
+ *  `tx-markets-${rows.length}.csv`. */
+export function exportMarkets(rows: MarketRow[]): void {
+  triggerCsvDownload(buildMarketsCsv(rows), `tx-markets-${rows.length}.csv`);
+}
+
+/** Shared blob-download helper for CSV strings. */
+function triggerCsvDownload(csv: string, filename: string): void {
+  const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

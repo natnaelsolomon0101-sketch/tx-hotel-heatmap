@@ -8,7 +8,8 @@ import {
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
 import { GoogleMapsOverlay } from "@deck.gl/google-maps";
-import { ScatterplotLayer } from "@deck.gl/layers";
+import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
+import type { Layer } from "@deck.gl/core";
 
 import {
   Bucket,
@@ -28,6 +29,7 @@ import { aggregateMarkets } from "@/lib/markets";
 import RangeFilters, { Range } from "./RangeFilters";
 import { decodeState, useUrlState, UrlState } from "@/lib/urlState";
 import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import ShortcutsHelp from "./ShortcutsHelp";
 import BriefButton from "./BriefButton";
 import PrintBrief from "./PrintBrief";
@@ -43,6 +45,16 @@ import { useWatchlist } from "@/lib/useWatchlist";
 import RollupPanel from "./RollupPanel";
 import { aggregateRollup, RollupDim } from "@/lib/rollups";
 import BrandFilter from "./BrandFilter";
+import FilterPresets from "./FilterPresets";
+import {
+  FilterPreset,
+  loadPresets,
+  savePresets,
+  loadRecentSearches,
+  saveRecentSearches,
+  pushRecentSearch,
+  MAX_PRESETS,
+} from "@/lib/presets";
 import { BrandKey, detectBrand, countBrands } from "@/lib/brands";
 import { downloadXls } from "@/lib/xls";
 import {
@@ -83,19 +95,134 @@ const BUCKET_RGBA: Record<Bucket, [number, number, number, number]> = {
 };
 
 // ---------------------------------------------------------------------------
-// GPU markers via deck.gl ScatterplotLayer.
+// Marker clustering (zoom-aware).
 // ---------------------------------------------------------------------------
+// Clustering config. `clusterRadius` is the nominal merge radius in pixels;
+// `disengageZoom` is the zoom level at/above which we drop clustering and
+// render raw individual pins (so dense urban cores stay precise on close-in
+// views). At Texas-wide zoom (~5-6) this produces a handful of metro clusters.
+type ClusteringSettings = {
+  clusterRadius: number; // px — nominal merge radius for the cluster bubble
+  disengageZoom: number; // zoom >= this → raw pins, no clustering
+};
+
+const CLUSTERING: ClusteringSettings = {
+  clusterRadius: 40,
+  disengageZoom: 10,
+};
+
+// A grid cluster: members plus a weighted centroid and dominant bucket.
+type Cluster = {
+  cluster: true;
+  cluster_id: string;
+  count: number;
+  lng: number;
+  lat: number;
+  bucket: Bucket;
+  members: HotelFeature[];
+};
+
+// Grid-cluster features in lng/lat space. The cell size is derived from zoom so
+// that one grid cell maps to roughly `clusterRadius` screen pixels — coarse
+// when zoomed out, fine when zoomed in. This is an approximation of pixel-space
+// clustering that needs no synchronous map projection. Singletons (one member)
+// are returned as raw features so they render as normal pins.
+function clusterFeatures(
+  features: HotelFeature[],
+  zoom: number,
+  radiusPx: number
+): { clusters: Cluster[]; singles: HotelFeature[] } {
+  // World pixels per degree of longitude at this zoom: 256 * 2^zoom / 360.
+  const worldPx = 256 * Math.pow(2, zoom);
+  const pxPerDeg = worldPx / 360;
+  const cellDeg = radiusPx / Math.max(pxPerDeg, 1e-6);
+  // Use the global Map constructor explicitly — the imported `Map` component
+  // from @vis.gl/react-google-maps shadows it in this module scope.
+  const cells: globalThis.Map<string, HotelFeature[]> = new globalThis.Map();
+  for (const f of features) {
+    const [lng, lat] = f.geometry.coordinates;
+    const cx = Math.floor(lng / cellDeg);
+    const cy = Math.floor(lat / cellDeg);
+    const key = `${cx}:${cy}`;
+    const arr = cells.get(key);
+    if (arr) arr.push(f);
+    else cells.set(key, [f]);
+  }
+  const clusters: Cluster[] = [];
+  const singles: HotelFeature[] = [];
+  for (const [key, members] of cells) {
+    if (members.length === 1) {
+      singles.push(members[0]);
+      continue;
+    }
+    let sx = 0;
+    let sy = 0;
+    const tally: Record<Bucket, number> = { red: 0, yellow: 0, gray: 0 };
+    for (const m of members) {
+      const [lng, lat] = m.geometry.coordinates;
+      sx += lng;
+      sy += lat;
+      tally[m.properties.bucket] += 1;
+    }
+    // Dominant bucket drives the bubble color (red wins ties — it's the lead).
+    const bucket: Bucket =
+      tally.red >= tally.yellow && tally.red >= tally.gray
+        ? "red"
+        : tally.yellow >= tally.gray
+        ? "yellow"
+        : "gray";
+    clusters.push({
+      cluster: true,
+      cluster_id: key,
+      count: members.length,
+      lng: sx / members.length,
+      lat: sy / members.length,
+      bucket,
+      members,
+    });
+  }
+  return { clusters, singles };
+}
+
+// How individual pins are sized. `constant` preserves the original fixed 5px
+// radius; `revpar`/`rooms` scale each pin's radius linearly within the metric's
+// observed min/max across the filtered set.
+type SizeBy = "constant" | "revpar" | "rooms";
+
+// Pixel band individual pins are scaled into when sizing by a metric.
+const PIN_MIN_PX = 3;
+const PIN_MAX_PX = 12;
+// Fallback radius for pins whose metric value is null/missing.
+const PIN_FALLBACK_PX = 5;
+
+// A hovered pin plus the screen-space (deck canvas) coordinates of the cursor,
+// so MapView can position a small tooltip near the pointer.
+type HoverInfo = {
+  feature: HotelFeature;
+  x: number;
+  y: number;
+};
+
+// GPU markers via deck.gl. Below `disengageZoom` nearby hotels merge into
+// cluster bubbles (count label) that expand on click; at/above it, every hotel
+// is an individual pickable pin. With `sizeBy` set to a metric, individual pins
+// are sized proportionally to that metric (default `constant` = original 5px).
 function MarkersLayer({
   features,
   visible,
   onSelect,
+  onHover,
+  sizeBy = "constant",
 }: {
   features: HotelFeature[];
   visible: boolean;
   onSelect: (f: HotelFeature) => void;
+  onHover?: (info: HoverInfo | null) => void;
+  sizeBy?: SizeBy;
 }) {
   const map = useMap();
   const overlayRef = useRef<GoogleMapsOverlay | null>(null);
+  const [zoom, setZoom] = useState<number>(TEXAS_ZOOM);
 
   useEffect(() => {
     if (!map) return;
@@ -108,6 +235,61 @@ function MarkersLayer({
     };
   }, [map]);
 
+  // Track zoom so clustering re-buckets as the user zooms in/out.
+  useEffect(() => {
+    if (!map) return;
+    const sync = () => setZoom(map.getZoom() ?? TEXAS_ZOOM);
+    sync();
+    const l = map.addListener("zoom_changed", sync);
+    return () => l.remove();
+  }, [map]);
+
+  // Fit the map to a cluster's bounds (expand on click). Falls back to a
+  // zoom-in step when all members share a point.
+  const expandCluster = useCallback(
+    (c: Cluster) => {
+      if (!map || !window.google) return;
+      const b = new google.maps.LatLngBounds();
+      for (const m of c.members) {
+        const [lng, lat] = m.geometry.coordinates;
+        b.extend({ lat, lng });
+      }
+      if (b.getNorthEast().equals(b.getSouthWest())) {
+        map.panTo(b.getCenter());
+        map.setZoom(Math.min((map.getZoom() ?? TEXAS_ZOOM) + 2, 16));
+      } else {
+        map.fitBounds(b, 64);
+      }
+    },
+    [map]
+  );
+
+  // Linear value→radius mapping for the selected metric. Computed over the
+  // current filtered features so the band always spans the visible spread.
+  // Returns a constant 5px when `sizeBy === "constant"` (original behavior) and
+  // a fallback for null/missing values.
+  const sizeScale = useMemo(() => {
+    if (sizeBy === "constant") return () => PIN_FALLBACK_PX;
+    let min = Infinity;
+    let max = -Infinity;
+    for (const f of features) {
+      const v = f.properties[sizeBy];
+      if (v == null) continue;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    // No usable values (or a single value) → fall back to the constant radius.
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+      return () => PIN_FALLBACK_PX;
+    }
+    const span = max - min;
+    return (value: number | null) => {
+      if (value == null || !Number.isFinite(value)) return PIN_FALLBACK_PX;
+      const t = Math.min(1, Math.max(0, (value - min) / span));
+      return PIN_MIN_PX + t * (PIN_MAX_PX - PIN_MIN_PX);
+    };
+  }, [features, sizeBy]);
+
   useEffect(() => {
     const overlay = overlayRef.current;
     if (!overlay) return;
@@ -115,34 +297,152 @@ function MarkersLayer({
       overlay.setProps({ layers: [] });
       return;
     }
-    const layer = new ScatterplotLayer<HotelFeature>({
-      id: "hotels",
-      data: features,
-      getPosition: (f) => f.geometry.coordinates as [number, number],
-      getFillColor: (f) => BUCKET_RGBA[f.properties.bucket],
-      getRadius: 5,
-      radiusUnits: "pixels",
-      radiusMinPixels: 2.5,
-      radiusMaxPixels: 8,
-      stroked: true,
-      lineWidthUnits: "pixels",
-      getLineWidth: 1,
-      getLineColor: [255, 255, 255, 230],
-      pickable: true,
-      autoHighlight: true,
-      highlightColor: [255, 255, 255, 80],
-      onClick: (info) => {
-        if (info.object) onSelect(info.object as HotelFeature);
-      },
-      updateTriggers: { getFillColor: features },
-    });
-    overlay.setProps({ layers: [layer] });
+
+    const layers: Layer[] = [];
+    const clusterOn = zoom < CLUSTERING.disengageZoom;
+    const { clusters, singles } = clusterOn
+      ? clusterFeatures(features, zoom, CLUSTERING.clusterRadius)
+      : { clusters: [] as Cluster[], singles: features };
+
+    // Individual pins — singletons when clustering, every hotel otherwise.
+    layers.push(
+      new ScatterplotLayer<HotelFeature>({
+        id: "hotels",
+        data: singles,
+        getPosition: (f) => f.geometry.coordinates as [number, number],
+        getFillColor: (f) => BUCKET_RGBA[f.properties.bucket],
+        getRadius: (f) =>
+          sizeBy === "constant"
+            ? 5
+            : sizeScale(f.properties[sizeBy]),
+        radiusUnits: "pixels",
+        radiusMinPixels: 2.5,
+        // Constant mode keeps the original tight 8px clamp; metric sizing needs
+        // headroom up to PIN_MAX_PX so large-RevPAR/room pins aren't clipped.
+        radiusMaxPixels: sizeBy === "constant" ? 8 : PIN_MAX_PX,
+        stroked: true,
+        lineWidthUnits: "pixels",
+        getLineWidth: 1,
+        getLineColor: [255, 255, 255, 230],
+        pickable: true,
+        autoHighlight: true,
+        highlightColor: [255, 255, 255, 80],
+        onClick: (info) => {
+          if (info.object) onSelect(info.object as HotelFeature);
+        },
+        // Hover tooltip: fire on pin mouseover with the cursor's screen-space
+        // (x,y) so MapView can position a small popup; clear it on mouseout
+        // (info.object null). Independent of selection — never touches it.
+        onHover: (info) => {
+          if (!onHover) return;
+          if (info.object) {
+            onHover({
+              feature: info.object as HotelFeature,
+              x: info.x,
+              y: info.y,
+            });
+          } else {
+            onHover(null);
+          }
+        },
+        updateTriggers: {
+          getFillColor: singles,
+          getRadius: [singles, sizeBy, sizeScale],
+        },
+      })
+    );
+
+    if (clusters.length > 0) {
+      // Cluster bubbles: a filled circle scaled by member count.
+      layers.push(
+        new ScatterplotLayer<Cluster>({
+          id: "cluster-bubbles",
+          data: clusters,
+          getPosition: (c) => [c.lng, c.lat],
+          getFillColor: (c) => {
+            const [r, g, bl] = BUCKET_RGBA[c.bucket];
+            return [r, g, bl, 210];
+          },
+          // Larger count → larger bubble, clamped to a sane pixel band.
+          getRadius: (c) =>
+            CLUSTERING.clusterRadius * 0.5 +
+            Math.min(Math.log2(c.count + 1) * 4, 22),
+          radiusUnits: "pixels",
+          radiusMinPixels: 14,
+          radiusMaxPixels: 44,
+          stroked: true,
+          lineWidthUnits: "pixels",
+          getLineWidth: 2,
+          getLineColor: [255, 255, 255, 240],
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 60],
+          onClick: (info) => {
+            if (info.object) expandCluster(info.object as Cluster);
+          },
+          // Clusters aren't individual hotels — never show the hotel tooltip,
+          // and clear any stale one when the cursor enters a bubble.
+          onHover: () => onHover?.(null),
+          updateTriggers: { getFillColor: clusters, getRadius: clusters },
+        })
+      );
+
+      // Count labels centered on each bubble.
+      layers.push(
+        new TextLayer<Cluster>({
+          id: "cluster-labels",
+          data: clusters,
+          getPosition: (c) => [c.lng, c.lat],
+          getText: (c) =>
+            c.count >= 1000 ? `${Math.round(c.count / 100) / 10}k` : `${c.count}`,
+          getSize: 12,
+          sizeUnits: "pixels",
+          getColor: [255, 255, 255, 255],
+          fontWeight: 700,
+          getTextAnchor: "middle",
+          getAlignmentBaseline: "center",
+          // Labels are decoration; clicks fall through to the bubble layer.
+          pickable: false,
+          updateTriggers: { getText: clusters },
+        })
+      );
+    }
+
+    overlay.setProps({ layers });
     // `map` is in the deps so this re-runs once the overlay is created (Effect A
     // runs first in the same commit); without it the layer never attaches on
     // first load and pins never paint.
-  }, [map, features, visible, onSelect]);
+  }, [map, features, visible, onSelect, onHover, zoom, expandCluster, sizeBy, sizeScale]);
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Hover tooltip — small popup near the cursor for a hovered pin. Renders the
+// hotel name, RevPAR, and room count. Positioned absolutely within the map
+// container at the deck-canvas (x,y) of the cursor, nudged +12px so it sits
+// just off the pointer. Independent of click selection.
+// ---------------------------------------------------------------------------
+function HoverTooltip({ info }: { info: HoverInfo | null }) {
+  if (!info) return null;
+  const p = info.feature.properties;
+  const revpar =
+    p.revpar != null
+      ? `$${Math.round(p.revpar).toLocaleString()}`
+      : "RevPAR n/a";
+  const rooms = p.rooms != null ? `${p.rooms.toLocaleString()} rooms` : "Rooms n/a";
+  return (
+    <div
+      className="pointer-events-none absolute z-50 w-[150px] rounded-lg bg-white/90 p-2 shadow-card ring-1 ring-black/5 backdrop-blur print:hidden"
+      style={{ left: info.x + 12, top: info.y + 12 }}
+    >
+      <div className="truncate text-xs font-semibold text-gray-900">
+        {p.name}
+      </div>
+      <div className="mt-0.5 font-mono text-xs text-gray-700">{revpar}</div>
+      <div className="text-[11px] text-gray-500">{rooms}</div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +582,19 @@ export default function MapView() {
 
   const [data, setData] = useState<HotelCollection | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
+  // When the most recent successful /hotels.geojson fetch completed. Drives the
+  // staleness label in the header. null until the first load resolves.
+  const [lastFetchTime, setLastFetchTime] = useState<number | null>(null);
+  // Refresh button feedback: "idle" normally, "loading" while a refetch is in
+  // flight, "refreshed" for a 2s success flash. A ref guards against duplicate
+  // concurrent fetches (button mashing / overlapping requests).
+  const [refreshState, setRefreshState] = useState<
+    "idle" | "loading" | "refreshed"
+  >("idle");
+  const refreshingRef = useRef(false);
+  // Tracks Google Maps JS API load failures (bad/over-quota key, 403, script
+  // 404, network timeout). Surfaced via APIProvider's onError callback below.
+  const [mapsApiError, setMapsApiError] = useState<string | null>(null);
   const [selected, setSelected] = useState<HotelFeature | null>(null);
   const [layerMode, setLayerMode] = useState<LayerMode>(
     initialUrlState.layer ?? "pins"
@@ -311,11 +624,35 @@ export default function MapView() {
   const [sheetOpen, setSheetOpen] = useState(true);
   // True while the Street View panorama is open — hide our overlay UI + pins.
   const [svOpen, setSvOpen] = useState(false);
+  // Hovered pin (name/RevPAR/rooms tooltip). Independent of `selected` — hover
+  // and click selection never affect each other.
+  const [hovered, setHovered] = useState<HoverInfo | null>(null);
+  // Touchscreen layout switch — drives PropertyCard's bottom-sheet rendering.
+  // Matches the Tailwind `md` breakpoint (<768px) used across the overlay UI.
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const watchlist = useWatchlist();
   const [revparRange, setRevparRange] = useState<Range | null>(null);
   const [roomsRange, setRoomsRange] = useState<Range | null>(null);
   const [activeBrands, setActiveBrands] = useState<Set<BrandKey>>(new Set());
+  // Saved filter views + recent searches (both persisted in localStorage).
+  // Initialized synchronously so the menu is populated on first paint.
+  const [savedPresets, setSavedPresets] = useState<FilterPreset[]>(() =>
+    loadPresets()
+  );
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    loadRecentSearches()
+  );
   const [helpOpen, setHelpOpen] = useState(false);
+  // Light/dark theme. Initialized synchronously from localStorage so first
+  // paint matches the persisted preference (no flash of the wrong theme).
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem("tx-hotel-heatmap-darkMode") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [compare, setCompare] = useState<HotelFeature[]>([]);
   const COMPARE_MAX = 3;
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -338,19 +675,93 @@ export default function MapView() {
     flyTo: (lng: number, lat: number) => void;
   } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/hotels.geojson")
-      .then((r) => {
-        if (!r.ok) throw new Error(`hotels.geojson ${r.status}`);
-        return r.json();
-      })
-      .then((json: HotelCollection) => !cancelled && setData(json))
-      .catch((e) => !cancelled && setDataError(String(e.message ?? e)));
-    return () => {
-      cancelled = true;
-    };
+  // Single source of truth for loading the dataset. Cache-busts with a `?t=`
+  // query param so a manual refresh always bypasses Vercel's edge / browser
+  // cache and picks up a freshly published public/hotels.geojson.
+  const loadData = useCallback(async (signal?: AbortSignal) => {
+    const r = await fetch(`/hotels.geojson?t=${Date.now()}`, { signal });
+    if (!r.ok) throw new Error(`hotels.geojson ${r.status}`);
+    const json: HotelCollection = await r.json();
+    setData(json);
+    setDataError(null);
+    setLastFetchTime(Date.now());
   }, []);
+
+  // Initial load. Aborts on unmount to avoid a setState-after-unmount.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    loadData(ctrl.signal).catch((e) => {
+      if (e?.name === "AbortError") return;
+      setDataError(String(e?.message ?? e));
+    });
+    return () => ctrl.abort();
+  }, [loadData]);
+
+  // Manual refresh (header button / error-state retry). Re-runs the same fetch,
+  // guarded against overlapping requests, and flashes a checkmark for 2s on
+  // success.
+  const refreshData = useCallback(() => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshState("loading");
+    loadData()
+      .then(() => {
+        setRefreshState("refreshed");
+        setTimeout(() => setRefreshState("idle"), 2000);
+      })
+      .catch((e) => {
+        setDataError(String(e?.message ?? e));
+        setRefreshState("idle");
+      })
+      .finally(() => {
+        refreshingRef.current = false;
+      });
+  }, [loadData]);
+
+  // Whole-days elapsed since the data last loaded. null until the first fetch
+  // resolves; the header only surfaces a staleness label once this exceeds 1.
+  const dataAge =
+    lastFetchTime == null
+      ? null
+      : Math.floor((Date.now() - lastFetchTime) / (1000 * 60 * 60 * 24));
+
+  // Persist the theme choice so it survives reloads.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "tx-hotel-heatmap-darkMode",
+        darkMode ? "1" : "0"
+      );
+    } catch {
+      /* ignore storage failures (private mode / quota) */
+    }
+  }, [darkMode]);
+
+  // Persist saved presets + recent searches whenever they change.
+  useEffect(() => {
+    savePresets(savedPresets);
+  }, [savedPresets]);
+  useEffect(() => {
+    saveRecentSearches(recentSearches);
+  }, [recentSearches]);
+
+  // Record non-empty searches into the recent list (debounced so we don't
+  // capture every keystroke — only queries the user pauses on).
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) return;
+    const t = setTimeout(() => {
+      setRecentSearches((prev) => pushRecentSearch(prev, q));
+    }, 800);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Drop any lingering hover tooltip when pins are no longer the active layer
+  // or Street View opens (the pin layer that drives `setHovered(null)` on
+  // mouseout is gone in those states, so clear it ourselves).
+  useEffect(() => {
+    if (svOpen || layerMode !== "pins") setHovered(null);
+  }, [svOpen, layerMode]);
 
   const revparIndex = useMemo(
     () => buildRevparIndex(data?.features ?? []),
@@ -655,6 +1066,40 @@ export default function MapView() {
     setQuery("");
   }, [ranges]);
 
+  // ---- Saved views / recent searches ----------------------------------
+  // Snapshot the current filter state into a named preset (newest first,
+  // capped at MAX_PRESETS — oldest dropped).
+  const savePreset = useCallback(
+    (name: string) => {
+      const preset: FilterPreset = {
+        name,
+        buckets: ALL_BUCKETS.filter((b) => activeBuckets.has(b)),
+        revparRange: revparVal,
+        roomsRange: roomsVal,
+        activeBrands: new Set(activeBrands),
+        query,
+        createdAt: Date.now(),
+      };
+      setSavedPresets((prev) => [preset, ...prev].slice(0, MAX_PRESETS));
+    },
+    [activeBuckets, revparVal, roomsVal, activeBrands, query]
+  );
+
+  // Restore every filter dimension from a preset.
+  const loadPreset = useCallback((preset: FilterPreset) => {
+    setActiveBuckets(
+      new Set(preset.buckets.length ? preset.buckets : ALL_BUCKETS)
+    );
+    setRevparRange(preset.revparRange);
+    setRoomsRange(preset.roomsRange);
+    setActiveBrands(new Set(preset.activeBrands));
+    setQuery(preset.query);
+  }, []);
+
+  const deletePreset = useCallback((createdAt: number) => {
+    setSavedPresets((prev) => prev.filter((p) => p.createdAt !== createdAt));
+  }, []);
+
   // ---- Area tool controls ---------------------------------------------
   const clearArea = useCallback(() => {
     setAreaMode(null);
@@ -756,6 +1201,7 @@ export default function MapView() {
       else setSelected(null);
     },
     onToggleHelp: () => setHelpOpen((v) => !v),
+    onClearAll: resetAll,
   });
 
   if (!GOOGLE_KEY) {
@@ -777,10 +1223,40 @@ export default function MapView() {
     );
   }
 
+  if (mapsApiError) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#eceff1] p-8">
+        <div className="max-w-md rounded-2xl bg-white p-6 text-center shadow-card">
+          <h1 className="text-lg font-semibold text-gray-900">
+            Google Maps failed to load
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">{mapsApiError}</p>
+          <button
+            type="button"
+            onClick={() => setMapsApiError(null)}
+            className="mt-4 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative h-screen w-screen">
+    <div className={`relative h-screen w-screen ${darkMode ? "dark" : ""}`}>
       <div className="absolute inset-0 print:hidden">
-        <APIProvider apiKey={GOOGLE_KEY}>
+        <APIProvider
+          apiKey={GOOGLE_KEY}
+          onError={(error) => {
+            // Bad/over-quota key, 403, script 404, or network timeout — the JS
+            // API never finishes loading. Swap the map for a recoverable card.
+            console.error("Google Maps API failed to load", error);
+            setMapsApiError(
+              "Check your API key quota and network connection, then retry."
+            );
+          }}
+        >
           <Map
             defaultCenter={TEXAS_CENTER}
             defaultZoom={TEXAS_ZOOM}
@@ -800,6 +1276,7 @@ export default function MapView() {
               features={filtered}
               visible={layerMode === "pins" && !svOpen}
               onSelect={flyToFeature}
+              onHover={setHovered}
             />
             <HeatLayer
               features={filtered}
@@ -827,10 +1304,19 @@ export default function MapView() {
             />
           </Map>
         </APIProvider>
+        {/* Hover tooltip — positioned in deck-canvas (x,y) space, which shares
+            this inset-0 container. Hidden during Street View. */}
+        {!svOpen && layerMode === "pins" && <HoverTooltip info={hovered} />}
       </div>
 
       <div className={`print:hidden ${svOpen ? "hidden" : ""}`}>
-        <HeaderBar stats={stats} period={DATA_PERIOD} />
+        <HeaderBar
+          stats={stats}
+          period={DATA_PERIOD}
+          dataAge={dataAge}
+          refreshState={refreshState}
+          onRefresh={refreshData}
+        />
         <div className="absolute right-3 top-2.5 z-40 flex items-center gap-2 md:right-4">
           <ShareButton
             urlState={urlState}
@@ -839,6 +1325,44 @@ export default function MapView() {
             roomsVal={roomsVal}
             count={listData.total}
           />
+          <button
+            type="button"
+            onClick={() => setDarkMode((v) => !v)}
+            aria-label={
+              darkMode ? "Switch to light mode" : "Switch to dark mode"
+            }
+            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow-card ring-1 ring-black/5 backdrop-blur transition hover:bg-gray-100 dark:bg-gray-800/95 dark:text-gray-200 dark:ring-white/10 dark:hover:bg-gray-700"
+          >
+            {darkMode ? (
+              // sun
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+              </svg>
+            ) : (
+              // moon
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
+          </button>
           <BriefButton />
         </div>
       </div>
@@ -920,6 +1444,17 @@ export default function MapView() {
             counts={brandCounts}
             onReset={() => setActiveBrands(new Set())}
           />
+          <div className="mt-2">
+            <FilterPresets
+              presets={savedPresets}
+              recentSearches={recentSearches}
+              canSave={hasFilters || query.trim().length > 0}
+              onSavePreset={savePreset}
+              onLoadPreset={loadPreset}
+              onDeletePreset={deletePreset}
+              onLoadSearch={setQuery}
+            />
+          </div>
         </div>
         {areaSelection ? (
           <AreaSummary
@@ -1028,6 +1563,7 @@ export default function MapView() {
         <PropertyCard
           hotel={selected.properties}
           onClose={() => setSelected(null)}
+          isMobile={isMobile}
           percentiles={getHotelPercentiles(
             selected.properties.revpar,
             selected.properties.city,
@@ -1040,10 +1576,20 @@ export default function MapView() {
       )}
 
       {dataError && (
-        <div className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-card print:hidden">
-          No hotel data loaded yet — run{" "}
-          <code className="font-mono">npm run build-data</code> to generate
-          public/hotels.geojson.
+        <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-card print:hidden">
+          <span>
+            No hotel data loaded yet — run{" "}
+            <code className="font-mono">npm run build-data</code> to generate
+            public/hotels.geojson.
+          </span>
+          <button
+            type="button"
+            onClick={refreshData}
+            disabled={refreshState === "loading"}
+            className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 font-medium text-white transition hover:bg-white/25 disabled:opacity-60"
+          >
+            {refreshState === "loading" ? "Retrying…" : "Retry"}
+          </button>
         </div>
       )}
 

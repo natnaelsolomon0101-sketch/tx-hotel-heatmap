@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { BUCKET_COLORS, BUCKET_LABELS, HotelProperties } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { HotelPercentiles } from "@/lib/percentile";
@@ -24,6 +24,12 @@ type PropertyCardProps = {
   compareFull?: boolean;
   /** Toggle this hotel's compare-tray membership; enables the Compare button. */
   onToggleCompare?: () => void;
+  /**
+   * Render as a full-width bottom sheet with a drag handle + swipe-to-dismiss
+   * (touchscreen layout). When false/unset, renders the desktop floating
+   * overlay. Driven by MapView from a `(max-width: 767px)` media query.
+   */
+  isMobile?: boolean;
 };
 
 function pct(n: number | null): string {
@@ -104,8 +110,42 @@ export default function PropertyCard({
   inCompare,
   compareFull,
   onToggleCompare,
+  isMobile = false,
 }: PropertyCardProps) {
-  const [copied, setCopied] = useState(false);
+  // Which copy action last fired, so we can show targeted "Copied" feedback and
+  // a transient toast. `null` when nothing has been copied recently.
+  const [copied, setCopied] = useState<
+    null | "address" | "coords" | "directions"
+  >(null);
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Swipe-to-dismiss (mobile only): track the vertical drag distance from the
+  // touch start so a downward fling past the threshold closes the sheet, and
+  // shorter drags spring back. `null` while no touch is in progress.
+  const touchStartY = useRef<number | null>(null);
+  const [dragY, setDragY] = useState(0);
+
+  const SWIPE_DISMISS_PX = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    setDragY(0);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY.current == null) return;
+    const delta = e.touches[0].clientY - touchStartY.current;
+    // Only follow downward drags; ignore upward pulls so internal scroll wins.
+    setDragY(Math.max(0, delta));
+  };
+
+  const onTouchEnd = () => {
+    if (touchStartY.current == null) return;
+    if (dragY > SWIPE_DISMISS_PX) {
+      onClose();
+    }
+    touchStartY.current = null;
+    setDragY(0);
+  };
 
   const titleCase = (s: string) =>
     s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
@@ -122,22 +162,87 @@ export default function PropertyCard({
     `${hotel.name}, ${fullAddress}`
   )}`;
 
-  const copyAddress = async () => {
-    try {
-      await navigator.clipboard.writeText(fullAddress);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setCopied(false);
-    }
+  // The parent builds streetViewUrl from this hotel's geometry coordinates as
+  // `...viewpoint=<lat>,<lng>`. Parse that "lat,lng" pair back out so we can
+  // offer a "Copy coordinates" action without threading raw geometry through a
+  // new prop. `null` when no street-view URL was provided.
+  const coordsText = (() => {
+    if (!streetViewUrl) return null;
+    const m = streetViewUrl.match(/viewpoint=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    return m ? `${m[1]},${m[2]}` : null;
+  })();
+
+  const copy = (kind: "address" | "coords" | "directions", text: string) => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(kind);
+        if (copyResetRef.current) clearTimeout(copyResetRef.current);
+        copyResetRef.current = setTimeout(() => setCopied(null), 2000);
+      })
+      .catch(() => setCopied(null));
   };
+
+  const copyAddress = () => copy("address", fullAddress);
+  const copyCoords = () => {
+    if (coordsText) copy("coords", coordsText);
+  };
+  const copyDirections = () => copy("directions", directionsUrl);
+
+  const toastLabel =
+    copied === "address"
+      ? "Address copied"
+      : copied === "coords"
+      ? "Coordinates copied"
+      : copied === "directions"
+      ? "Directions link copied"
+      : null;
 
   return (
     <div
-      className="absolute z-30 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-black/5
-        inset-x-2 bottom-2 max-h-[80vh] overflow-y-auto
-        md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-none"
+      role="dialog"
+      aria-modal={isMobile || undefined}
+      aria-label={titleCase(hotel.name)}
+      className={
+        isMobile
+          ? "fixed inset-x-0 bottom-0 z-30 flex max-h-[90vh] flex-col overflow-hidden rounded-t-3xl bg-white shadow-card ring-1 ring-black/5"
+          : "absolute z-30 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-black/5 inset-x-2 bottom-2 max-h-[80vh] overflow-y-auto md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-none"
+      }
+      style={
+        isMobile
+          ? {
+              transform: `translateY(${dragY}px)`,
+              transition: dragY === 0 ? "transform 0.2s ease-out" : "none",
+            }
+          : undefined
+      }
     >
+      {/* Mobile bottom-sheet drag handle: visible grabber + a touch target for
+          swipe-to-dismiss, with an explicit close button for tap dismissal. */}
+      {isMobile && (
+        <div
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          className="relative shrink-0 cursor-grab touch-none select-none bg-white pb-1 pt-2.5 active:cursor-grabbing"
+        >
+          <span className="mx-auto block h-1.5 w-10 rounded-full bg-gray-300" />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-2 top-0.5 flex h-12 w-12 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+      )}
+
+      <div
+        className={
+          isMobile ? "min-h-0 flex-1 overflow-y-auto overscroll-contain" : "contents"
+        }
+      >
       <div className="relative h-36 w-full bg-gray-100">
         {hotel.photo ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -168,14 +273,18 @@ export default function PropertyCard({
               <BookmarkIcon className="h-4 w-4" filled={saved} />
             </button>
           )}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
-          >
-            <CloseIcon />
-          </button>
+          {/* On mobile the drag-handle bar carries the close button, so the
+              in-image close is desktop-only to avoid a redundant control. */}
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
+            >
+              <CloseIcon />
+            </button>
+          )}
         </div>
       </div>
 
@@ -245,8 +354,8 @@ export default function PropertyCard({
             aria-label="Copy address"
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
           >
-            {copied ? <CheckIcon /> : <CopyIcon />}
-            {copied ? "Copied" : "Copy address"}
+            {copied === "address" ? <CheckIcon /> : <CopyIcon />}
+            {copied === "address" ? "Copied" : "Copy address"}
           </button>
           <a
             href={directionsUrl}
@@ -257,6 +366,30 @@ export default function PropertyCard({
             <DirectionsIcon />
             Directions
           </a>
+        </div>
+
+        <div className="mt-2 flex gap-2">
+          {coordsText && (
+            <button
+              type="button"
+              onClick={copyCoords}
+              aria-label="Copy coordinates"
+              title={coordsText}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
+            >
+              {copied === "coords" ? <CheckIcon /> : <CopyIcon />}
+              {copied === "coords" ? "Copied" : "Copy coordinates"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={copyDirections}
+            aria-label="Copy directions link"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
+          >
+            {copied === "directions" ? <CheckIcon /> : <CopyIcon />}
+            {copied === "directions" ? "Copied" : "Directions link"}
+          </button>
         </div>
 
         {streetViewUrl && (
@@ -302,6 +435,19 @@ export default function PropertyCard({
           </p>
         )}
       </div>
+      </div>
+
+      {/* Transient copy confirmation toast (auto-dismisses after ~2s). */}
+      {toastLabel && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-gray-900/90 px-3 py-1.5 text-[11px] font-medium text-white shadow-card"
+        >
+          <CheckIcon />
+          {toastLabel}
+        </div>
+      )}
     </div>
   );
 }
