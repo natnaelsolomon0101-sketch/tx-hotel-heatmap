@@ -250,7 +250,14 @@ async function geocodeGoogle(
       continue;
     }
     if (json.status === "REQUEST_DENIED") {
-      throw new Error(`Google geocoding denied: ${json.error_message ?? ""}`);
+      const msg: string = json.error_message ?? "";
+      // A freshly-enabled API can report "not activated" for a minute or two
+      // while it propagates — retry those rather than aborting the whole run.
+      if (/activat/i.test(msg) && attempt < 3) {
+        await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
+        continue;
+      }
+      throw new Error(`Google geocoding denied: ${msg}`);
     }
     const r = json.results?.[0];
     if (!r) return null;
