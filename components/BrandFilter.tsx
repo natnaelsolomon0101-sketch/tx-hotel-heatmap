@@ -43,17 +43,17 @@ export default function BrandFilter({
   };
 
   return (
-    <div className="hidden shrink-0 rounded-2xl bg-white/95 p-3 shadow-card ring-1 ring-black/5 backdrop-blur md:block">
+    <div className="hidden shrink-0 rounded-panel bg-surface p-3 shadow-sm ring-1 ring-border md:block">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Brand
-        </h2>
+        <h2 className="label-overline">Brand</h2>
         <button
           type="button"
           onClick={onReset}
           disabled={allSelected}
-          className={`text-xs font-medium ${
-            allSelected ? "text-gray-300" : "text-blue-600 hover:underline"
+          className={`text-xs font-medium transition-base ${
+            allSelected
+              ? "text-subtle"
+              : "text-accent hover:text-[hsl(var(--accent-hover))]"
           }`}
         >
           Show all
@@ -66,18 +66,18 @@ export default function BrandFilter({
           return (
             <label
               key={brand}
-              className="flex items-center gap-2 cursor-pointer transition hover:bg-gray-50 rounded-lg px-2 py-1"
+              className="flex items-center gap-2 cursor-pointer transition-base hover:bg-muted rounded-lg px-2 py-1"
             >
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={() => toggleBrand(brand)}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                className="h-4 w-4 rounded border-border accent-[hsl(var(--accent))]"
               />
-              <span className="flex-1 text-sm text-gray-700">
+              <span className="flex-1 text-sm text-foreground">
                 {BRAND_LABELS[brand]}
               </span>
-              <span className="text-xs tabular-nums text-gray-400">
+              <span className="text-xs font-mono tabular-nums text-subtle">
                 {counts[brand].toLocaleString()}
               </span>
             </label>
@@ -85,7 +85,7 @@ export default function BrandFilter({
         })}
       </div>
 
-      <p className="mt-2 border-t border-gray-100 pt-2 text-[11px] leading-snug text-gray-400">
+      <p className="mt-2 border-t border-border pt-2 text-meta leading-snug text-subtle">
         Filter by hotel brand or brand family.
       </p>
     </div>

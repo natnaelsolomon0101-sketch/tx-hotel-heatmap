@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { BUCKET_COLORS, BUCKET_LABELS, HotelProperties } from "@/lib/types";
+import { Bucket, BUCKET_LABELS, HotelProperties } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { HotelPercentiles } from "@/lib/percentile";
 import PercentileBar from "./PercentileBar";
@@ -38,14 +38,37 @@ function pct(n: number | null): string {
   return `${Math.round(n * 100)}%`;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+// Maps the dataset's RevPAR bucket to the shared revpar tier tokens so the
+// pill background (-soft) and text (solid) stay in sync across the app.
+const BUCKET_TIER: Record<Bucket, { soft: string; solid: string }> = {
+  red: { soft: "bg-revpar-high-soft", solid: "text-revpar-high" },
+  yellow: { soft: "bg-revpar-mid-soft", solid: "text-revpar-mid" },
+  gray: { soft: "bg-revpar-low-soft", solid: "text-revpar-low" },
+};
+
+function Stat({
+  label,
+  value,
+  delta,
+}: {
+  label: string;
+  value: string;
+  delta?: string | null;
+}) {
   return (
     <div className="flex-1">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
-        {label}
-      </div>
-      <div className="text-base font-semibold tabular-nums text-gray-900">
-        {value}
+      <div className="label-overline">{label}</div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-data text-foreground">{value}</span>
+        {delta && (
+          <span
+            className={`text-meta font-mono font-semibold ${
+              delta.startsWith("-") ? "text-negative" : "text-positive"
+            }`}
+          >
+            {delta}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -206,8 +229,8 @@ export default function PropertyCard({
       aria-label={titleCase(hotel.name)}
       className={
         isMobile
-          ? "fixed inset-x-0 bottom-0 z-30 flex max-h-[90vh] flex-col overflow-hidden rounded-t-3xl bg-white shadow-card ring-1 ring-black/5"
-          : "absolute z-30 overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-black/5 inset-x-2 bottom-2 max-h-[80vh] overflow-y-auto md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-none"
+          ? "fixed inset-x-0 bottom-0 z-30 flex max-h-[90vh] flex-col overflow-hidden rounded-t-panel bg-surface shadow-lg ring-1 ring-border"
+          : "absolute z-30 overflow-hidden rounded-panel bg-surface shadow-lg ring-1 ring-border inset-x-2 bottom-2 max-h-[80vh] overflow-y-auto md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-none"
       }
       style={
         isMobile
@@ -225,14 +248,14 @@ export default function PropertyCard({
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-          className="relative shrink-0 cursor-grab touch-none select-none bg-white pb-1 pt-2.5 active:cursor-grabbing"
+          className="relative shrink-0 cursor-grab touch-none select-none bg-surface pb-1 pt-2.5 active:cursor-grabbing"
         >
-          <span className="mx-auto block h-1.5 w-10 rounded-full bg-gray-300" />
+          <span className="mx-auto block h-1.5 w-10 rounded-full bg-border-strong" />
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-2 top-0.5 flex h-12 w-12 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
+            className="transition-base absolute right-2 top-0.5 flex h-12 w-12 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
           >
             <CloseIcon />
           </button>
@@ -244,7 +267,7 @@ export default function PropertyCard({
           isMobile ? "min-h-0 flex-1 overflow-y-auto overscroll-contain" : "contents"
         }
       >
-      <div className="relative h-36 w-full bg-gray-100">
+      <div className="relative h-36 w-full bg-muted">
         {hotel.photo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -253,13 +276,32 @@ export default function PropertyCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 text-xs text-gray-400">
-            No photo available
+          <div className="flex h-full w-full items-center justify-center bg-muted text-subtle">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-9 w-9"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <circle cx="8.5" cy="9.5" r="1.5" />
+              <path d="M21 16l-5-5L5 20" />
+            </svg>
           </div>
         )}
+        {/* Subtle bottom scrim so overlay controls and any photo edge read cleanly. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/30 to-transparent" />
         <span
-          className="absolute left-3 top-3 h-3.5 w-3.5 rounded-full ring-2 ring-white"
-          style={{ backgroundColor: BUCKET_COLORS[hotel.bucket] }}
+          className={`absolute left-3 top-3 h-3.5 w-3.5 rounded-full ring-2 ring-white ${
+            hotel.bucket === "red"
+              ? "bg-revpar-high"
+              : hotel.bucket === "yellow"
+              ? "bg-revpar-mid"
+              : "bg-revpar-low"
+          }`}
         />
         <div className="absolute right-2 top-2 flex items-center gap-1.5">
           {onToggleSaved && (
@@ -269,7 +311,7 @@ export default function PropertyCard({
               aria-label={saved ? "Remove from watchlist" : "Save to watchlist"}
               aria-pressed={saved}
               title={saved ? "Saved — click to remove" : "Save to watchlist"}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
+              className="transition-base flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
             >
               <BookmarkIcon className="h-4 w-4" filled={saved} />
             </button>
@@ -281,7 +323,7 @@ export default function PropertyCard({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
+              className="transition-base flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
             >
               <CloseIcon />
             </button>
@@ -290,10 +332,10 @@ export default function PropertyCard({
       </div>
 
       <div className="p-4">
-        <h3 className="text-base font-semibold leading-tight text-gray-900">
+        <h3 className="text-display text-foreground leading-tight">
           {titleCase(hotel.name)}
         </h3>
-        <p className="mt-0.5 text-sm text-gray-500">
+        <p className="text-meta mt-0.5 text-muted-foreground">
           {titleCase(hotel.address)}
           {hotel.city ? `, ${titleCase(hotel.city)}` : ""} {hotel.state}{" "}
           {hotel.zip}
@@ -301,29 +343,33 @@ export default function PropertyCard({
 
         <div className="mt-2 flex items-center gap-2">
           <span
-            className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-gray-700 ring-1 ring-black/5"
-            style={{ backgroundColor: `${BUCKET_COLORS[hotel.bucket]}1f` }}
+            className={`text-meta inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono font-semibold ${BUCKET_TIER[hotel.bucket].soft} ${BUCKET_TIER[hotel.bucket].solid}`}
           >
             <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: BUCKET_COLORS[hotel.bucket] }}
+              className={`h-2 w-2 rounded-full ${
+                hotel.bucket === "red"
+                  ? "bg-revpar-high"
+                  : hotel.bucket === "yellow"
+                  ? "bg-revpar-mid"
+                  : "bg-revpar-low"
+              }`}
             />
             {BUCKET_LABELS[hotel.bucket]}
           </span>
         </div>
 
-        <p className="mt-1.5 text-xs font-medium text-gray-600">
+        <p className="text-meta mt-1.5 font-medium text-muted-foreground">
           {hotel.rooms != null ? `${hotel.rooms} Rooms` : "Rooms n/a"} ·
           Hospitality
         </p>
 
-        <div className="mt-3 flex gap-3 border-t border-gray-100 pt-3">
+        <div className="mt-3 flex gap-3 border-t border-border pt-3">
           <Stat label="RevPAR" value={fmtMoney(hotel.revpar)} />
           <Stat label="ADR" value={fmtMoney(hotel.adr)} />
           <Stat label="Occupancy" value={pct(hotel.occupancy)} />
         </div>
 
-        <div className="mt-3 border-t border-gray-100 pt-3">
+        <div className="mt-3 border-t border-border pt-3">
           <Stat label="Revenue (latest mo)" value={fmtMoney(hotel.revenue)} />
         </div>
 
@@ -334,10 +380,8 @@ export default function PropertyCard({
         />
 
         {percentiles && (
-          <div className="mt-3 space-y-2.5 border-t border-gray-100 pt-3">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
-              Performance
-            </div>
+          <div className="mt-3 space-y-2.5 border-t border-border pt-3">
+            <div className="label-overline">Performance</div>
             <PercentileBar
               label="Statewide"
               value={percentiles.statewide}
@@ -359,7 +403,7 @@ export default function PropertyCard({
             type="button"
             onClick={copyAddress}
             aria-label="Copy address"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
+            className="transition-base inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border hover:-translate-y-px hover:bg-[hsl(var(--surface-muted))]"
           >
             {copied === "address" ? <CheckIcon /> : <CopyIcon />}
             {copied === "address" ? "Copied" : "Copy address"}
@@ -368,7 +412,7 @@ export default function PropertyCard({
             href={directionsUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-700"
+            className="transition-base inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-xs font-medium text-white hover:-translate-y-px hover:bg-ink-hover"
           >
             <DirectionsIcon />
             Directions
@@ -382,7 +426,7 @@ export default function PropertyCard({
               onClick={copyCoords}
               aria-label="Copy coordinates"
               title={coordsText}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
+              className="transition-base inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border hover:-translate-y-px hover:bg-[hsl(var(--surface-muted))]"
             >
               {copied === "coords" ? <CheckIcon /> : <CopyIcon />}
               {copied === "coords" ? "Copied" : "Copy coordinates"}
@@ -392,7 +436,7 @@ export default function PropertyCard({
             type="button"
             onClick={copyDirections}
             aria-label="Copy directions link"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
+            className="transition-base inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border hover:-translate-y-px hover:bg-[hsl(var(--surface-muted))]"
           >
             {copied === "directions" ? <CheckIcon /> : <CopyIcon />}
             {copied === "directions" ? "Copied" : "Directions link"}
@@ -404,7 +448,7 @@ export default function PropertyCard({
             href={streetViewUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
+            className="transition-base mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border hover:-translate-y-px hover:bg-[hsl(var(--surface-muted))]"
           >
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="5" r="2.4" />
@@ -426,10 +470,10 @@ export default function PropertyCard({
                 ? "Max 3 in compare"
                 : "Add to compare"
             }
-            className={`mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium ring-1 ring-black/5 transition-colors ${
+            className={`transition-base mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ${
               inCompare
-                ? "bg-gray-900 text-white hover:bg-gray-700"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:hover:bg-gray-100"
+                ? "bg-[hsl(var(--accent)/0.10)] text-accent ring-1 ring-[hsl(var(--accent)/0.30)] hover:-translate-y-px"
+                : "bg-muted text-foreground ring-1 ring-border hover:-translate-y-px hover:bg-[hsl(var(--surface-muted))] disabled:translate-y-0 disabled:opacity-40 disabled:hover:bg-muted"
             }`}
           >
             {inCompare ? "★ In compare" : compareFull ? "Compare full (3)" : "+ Compare"}
@@ -437,7 +481,7 @@ export default function PropertyCard({
         )}
 
         {hotel.flagged && (
-          <p className="mt-2 text-[11px] text-amber-600">
+          <p className="text-meta mt-2 text-warning">
             Some financials were missing for this property.
           </p>
         )}
@@ -449,7 +493,7 @@ export default function PropertyCard({
         <div
           role="status"
           aria-live="polite"
-          className="pointer-events-none absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-gray-900/90 px-3 py-1.5 text-[11px] font-medium text-white shadow-card"
+          className="text-meta pointer-events-none absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 font-medium text-white shadow-md"
         >
           <CheckIcon />
           {toastLabel}

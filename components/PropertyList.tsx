@@ -45,6 +45,12 @@ type PropertyListProps = {
 const titleCase = (s: string) =>
   s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
+const PCT_CHIP: Record<HotelFeature["properties"]["bucket"], string> = {
+  red: "bg-revpar-high-soft text-revpar-high",
+  yellow: "bg-revpar-mid-soft text-revpar-mid",
+  gray: "bg-revpar-low-soft text-revpar-low",
+};
+
 const money = (n: number | null) =>
   n == null
     ? "—"
@@ -83,13 +89,11 @@ export default function PropertyList({
   onToggleSaved,
 }: PropertyListProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white/95 shadow-card ring-1 ring-black/5 backdrop-blur">
-      <div className="border-b border-gray-100 p-3">
+    <div className="flex min-h-0 flex-1 flex-col rounded-lg bg-surface shadow-sm ring-1 ring-border backdrop-blur">
+      <div className="border-b border-border p-3">
         <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Properties
-          </h2>
-          <span className="text-[11px] tabular-nums text-gray-400">
+          <h2 className="label-overline">Properties</h2>
+          <span className="text-meta font-mono tabular-nums text-subtle">
             {query
               ? `${total.toLocaleString()} match`
               : `${total.toLocaleString()} in view`}
@@ -101,13 +105,13 @@ export default function PropertyList({
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             placeholder="Search hotel or city…"
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-800 outline-none placeholder:text-gray-400 focus:border-gray-400"
+            className="h-9 w-full rounded-lg bg-surface px-3 text-sm text-foreground outline-none ring-1 ring-border transition-base placeholder:text-subtle focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           />
           {query && (
             <button
               onClick={() => onQuery("")}
               aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-subtle transition-base hover:text-foreground"
             >
               ×
             </button>
@@ -118,7 +122,7 @@ export default function PropertyList({
             value={sort}
             onChange={(e) => onSort(e.target.value as SortKey)}
             aria-label="Sort properties"
-            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600 outline-none focus:border-gray-400"
+            className="h-8 min-w-0 flex-1 rounded-lg bg-surface px-2 text-sm text-muted-foreground outline-none ring-1 ring-border transition-base focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
               <option key={k} value={k}>
@@ -131,7 +135,7 @@ export default function PropertyList({
             onClick={onExport}
             disabled={total === 0}
             title="Export current list to CSV"
-            className="flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 text-sm font-medium text-muted-foreground ring-1 ring-border transition-base hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40"
           >
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
@@ -144,7 +148,7 @@ export default function PropertyList({
               onClick={onExportXls}
               disabled={total === 0}
               title="Export current list to Excel"
-              className="flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 text-sm font-medium text-muted-foreground ring-1 ring-border transition-base hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40"
             >
               XLS
             </button>
@@ -172,7 +176,7 @@ export default function PropertyList({
             clearLabel={query && !hasFilters ? "Clear search" : "Clear filters"}
           />
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border">
             {rows.map((f, i) => {
               const p = f.properties;
               const k = featureKey(f);
@@ -185,8 +189,10 @@ export default function PropertyList({
               return (
                 <li key={k + i}>
                   <div
-                    className={`flex w-full items-center gap-2.5 px-3 py-2 transition ${
-                      active ? "bg-gray-100" : "hover:bg-gray-50"
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 transition-base ${
+                      active
+                        ? "bg-[hsl(var(--accent)/0.08)] ring-1 ring-inset ring-[hsl(var(--accent)/0.25)]"
+                        : "hover:bg-muted"
                     }`}
                   >
                     <button
@@ -194,31 +200,31 @@ export default function PropertyList({
                       className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                     >
                       <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-surface"
                         style={{ backgroundColor: BUCKET_COLORS[p.bucket] }}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-gray-800">
+                        <span className="block truncate text-sm font-medium text-foreground">
                           {titleCase(p.name)}
                         </span>
-                        <span className="block truncate text-[11px] text-gray-500">
+                        <span className="block truncate text-meta text-muted-foreground">
                           {titleCase(p.city)}, {p.state}
                           {p.rooms != null ? ` · ${p.rooms} rms` : ""}
                         </span>
                       </span>
                       {pct != null && (
                         <span
-                          className="shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-500"
+                          className={`shrink-0 rounded-md px-1.5 py-0.5 text-meta font-mono font-semibold ${PCT_CHIP[p.bucket]}`}
                           title={`Statewide RevPAR percentile: P${pct}`}
                         >
                           P{pct}
                         </span>
                       )}
                       <span className="shrink-0 text-right">
-                        <span className="block text-sm font-semibold tabular-nums text-gray-900">
+                        <span className="block text-data-sm text-foreground">
                           {money(p.revpar)}
                         </span>
-                        <span className="block text-[10px] uppercase tracking-wide text-gray-400">
+                        <span className="block label-overline text-[9px]">
                           RevPAR
                         </span>
                       </span>
@@ -236,10 +242,10 @@ export default function PropertyList({
                             ? `Max ${compareMax} in compare`
                             : "Add to compare"
                         }
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-base leading-none transition ${
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-base leading-none transition-base ${
                           compared
-                            ? "bg-gray-900 text-white"
-                            : "text-gray-300 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40 disabled:hover:bg-transparent"
+                            ? "bg-ink text-surface"
+                            : "text-subtle hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
                         }`}
                       >
                         {compared ? "★" : "✩"}
@@ -252,10 +258,10 @@ export default function PropertyList({
                         aria-label={saved ? "Remove from watchlist" : "Save to watchlist"}
                         aria-pressed={saved}
                         title={saved ? "Saved — click to remove" : "Save to watchlist"}
-                        className={`shrink-0 rounded-md p-1 transition ${
+                        className={`shrink-0 rounded-md p-1 transition-base ${
                           saved
-                            ? "text-gray-900 hover:bg-gray-100"
-                            : "text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+                            ? "text-foreground hover:bg-muted"
+                            : "text-subtle hover:bg-muted hover:text-foreground"
                         }`}
                       >
                         <BookmarkIcon className="h-4 w-4" filled={saved} />
@@ -270,7 +276,7 @@ export default function PropertyList({
       </div>
 
       {total > limit && !query && (
-        <div className="border-t border-gray-100 px-3 py-2 text-[11px] text-gray-400">
+        <div className="border-t border-border px-3 py-2 text-meta text-subtle">
           Showing top {limit} of {total.toLocaleString()} — zoom in or search to
           narrow.
         </div>

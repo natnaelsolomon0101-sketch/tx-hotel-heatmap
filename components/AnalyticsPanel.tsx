@@ -32,11 +32,7 @@ type AnalyticsPanelProps = {
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-      {children}
-    </h3>
-  );
+  return <h3 className="label-overline mb-2">{children}</h3>;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +86,7 @@ function RevparHistogram({
             x2={W - padR}
             y1={y}
             y2={y}
-            stroke="#eceff1"
+            stroke="hsl(var(--border))"
             strokeWidth={1}
           />
         );
@@ -108,7 +104,7 @@ function RevparHistogram({
               width={barW}
               height={Math.max(h, b.count > 0 ? 1 : 0)}
               rx={1.5}
-              fill="#94a3b8"
+              fill="hsl(var(--accent))"
             >
               <title>{`$${b.label} — ${b.count.toLocaleString()} hotels`}</title>
             </rect>
@@ -117,7 +113,8 @@ function RevparHistogram({
               y={H - 6}
               textAnchor="middle"
               fontSize={7}
-              fill="#9aa0a6"
+              fill="hsl(var(--subtle-foreground))"
+              fontFamily="var(--font-mono, monospace)"
             >
               {b.label}
             </text>
@@ -132,7 +129,7 @@ function RevparHistogram({
             x2={medianX}
             y1={padTop - 2}
             y2={padTop + plotH}
-            stroke="#111827"
+            stroke="hsl(var(--ink))"
             strokeWidth={1.25}
             strokeDasharray="3 2"
           />
@@ -141,7 +138,8 @@ function RevparHistogram({
             y={padTop + 6}
             fontSize={7.5}
             fontWeight={600}
-            fill="#111827"
+            fill="hsl(var(--ink))"
+            fontFamily="var(--font-mono, monospace)"
           >
             {`med ${fmtMoney(median)}`}
           </text>
@@ -160,7 +158,7 @@ function BucketBreakdown({ buckets }: { buckets: Record<Bucket, number> }) {
 
   return (
     <div>
-      <span className="flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
+      <span className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
         {ALL_BUCKETS.map((b) =>
           buckets[b] > 0 ? (
             <span
@@ -178,17 +176,17 @@ function BucketBreakdown({ buckets }: { buckets: Record<Bucket, number> }) {
         {ALL_BUCKETS.map((b) => (
           <li
             key={b}
-            className="flex items-center gap-2 text-[11px] text-gray-600"
+            className="flex items-center gap-2 text-[11px] text-muted-foreground"
           >
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ backgroundColor: BUCKET_COLORS[b] }}
             />
             <span className="min-w-0 flex-1 truncate">{BUCKET_LABELS[b]}</span>
-            <span className="shrink-0 tabular-nums text-gray-800">
+            <span className="text-data-sm shrink-0 text-foreground">
               {buckets[b].toLocaleString()}
             </span>
-            <span className="w-9 shrink-0 text-right tabular-nums text-gray-400">
+            <span className="w-9 shrink-0 text-right font-mono tabular-nums text-subtle">
               {pct(buckets[b]).toFixed(0)}%
             </span>
           </li>
@@ -213,7 +211,7 @@ function TopMarkets({
 
   if (top.length === 0) {
     return (
-      <p className="text-[11px] leading-snug text-gray-400">
+      <p className="text-[11px] leading-snug text-subtle">
         No markets meet the minimum size for the current selection.
       </p>
     );
@@ -232,16 +230,16 @@ function TopMarkets({
               className="group block w-full text-left"
             >
               <span className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-[11px] font-medium text-gray-700 group-hover:text-gray-900">
+                <span className="transition-base min-w-0 truncate text-[11px] font-medium text-muted-foreground group-hover:text-foreground">
                   {r.city}
                 </span>
-                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-gray-900">
+                <span className="text-data-sm shrink-0 text-foreground">
                   {fmtMoney(r.avgRevpar)}
                 </span>
               </span>
-              <span className="mt-0.5 flex h-2 w-full overflow-hidden rounded-full bg-gray-100">
+              <span className="mt-0.5 flex h-2 w-full overflow-hidden rounded-full bg-muted">
                 <span
-                  className="h-full rounded-full bg-gray-400 transition-colors group-hover:bg-gray-900"
+                  className="transition-base h-full rounded-full bg-[hsl(var(--accent))] group-hover:bg-ink"
                   style={{ width: `${Math.max(w, 2)}%` }}
                 />
               </span>
@@ -266,7 +264,7 @@ function ScatterPlot({
   const points = computeScatterPlotData(inScope);
   if (points.length === 0) {
     return (
-      <p className="text-[11px] leading-snug text-gray-400">
+      <p className="text-[11px] leading-snug text-subtle">
         No hotels with both rooms and RevPAR data.
       </p>
     );
@@ -315,7 +313,7 @@ function ScatterPlot({
             x2={W - padR}
             y1={y}
             y2={y}
-            stroke="#eceff1"
+            stroke="hsl(var(--border))"
             strokeWidth={1}
           />
         );
@@ -331,7 +329,8 @@ function ScatterPlot({
               y={y + 2.5}
               textAnchor="end"
               fontSize={7}
-              fill="#9aa0a6"
+              fill="hsl(var(--subtle-foreground))"
+              fontFamily="var(--font-mono, monospace)"
             >
               ${(t / 1000).toFixed(1)}k
             </text>
@@ -344,7 +343,8 @@ function ScatterPlot({
         y={H - 2}
         textAnchor="middle"
         fontSize={7}
-        fill="#9aa0a6"
+        fill="hsl(var(--subtle-foreground))"
+        fontFamily="var(--font-mono, monospace)"
       >
         Rooms (log)
       </text>
@@ -361,7 +361,7 @@ function ScatterPlot({
                 cy={y}
                 r={4.5}
                 fill="none"
-                stroke="#ef4444"
+                stroke="hsl(var(--accent))"
                 strokeWidth={1.25}
                 opacity={0.6}
               />
@@ -401,7 +401,7 @@ function OutlierList({
 }) {
   if (outliers.length === 0) {
     return (
-      <p className="text-[11px] leading-snug text-gray-400">
+      <p className="text-[11px] leading-snug text-subtle">
         No significant outliers detected in the current selection.
       </p>
     );
@@ -424,18 +424,23 @@ function OutlierList({
               <span className="mt-0.5 shrink-0">
                 <span
                   className={`inline-block h-2 w-2 rounded-full ${
-                    isHigher ? "bg-green-500" : "bg-orange-500"
+                    isHigher
+                      ? "bg-[hsl(var(--revpar-high))]"
+                      : "bg-[hsl(var(--revpar-low))]"
                   }`}
                 />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-medium text-gray-700 group-hover:text-gray-900">
+                <span className="transition-base block text-[11px] font-medium text-muted-foreground group-hover:text-foreground">
                   {o.feature.properties.name}
                 </span>
-                <span className="block text-[10px] text-gray-500">
-                  {o.feature.properties.city} · {fmtMoney(o.feature.properties.revpar)}
+                <span className="block text-[10px] text-muted-foreground">
+                  {o.feature.properties.city} ·{" "}
+                  <span className="font-mono tabular-nums">
+                    {fmtMoney(o.feature.properties.revpar)}
+                  </span>
                 </span>
-                <span className="block text-[10px] text-gray-400">
+                <span className="block font-mono text-[10px] tabular-nums text-subtle">
                   {isHigher ? "↑" : "↓"} {Math.abs(o.ratio - 1).toFixed(1)}x city median
                   {" · "}z={o.zscore.toFixed(1)}
                 </span>
@@ -445,7 +450,7 @@ function OutlierList({
         );
       })}
       {outliers.length > displayed.length && (
-        <p className="text-[10px] text-gray-400">
+        <p className="font-mono text-[10px] tabular-nums text-subtle">
           +{outliers.length - displayed.length} more
         </p>
       )}
@@ -468,7 +473,7 @@ function CityLeaderboard({
 
   if (top.length === 0) {
     return (
-      <p className="text-[11px] leading-snug text-gray-400">
+      <p className="text-[11px] leading-snug text-subtle">
         No markets available for ranking.
       </p>
     );
@@ -485,21 +490,21 @@ function CityLeaderboard({
               onClick={() => onSelectMarket(r.city)}
               className="group flex w-full items-center gap-2 text-left"
             >
-              <span className="w-5 shrink-0 text-right text-[11px] font-bold text-gray-500">
+              <span className="w-5 shrink-0 text-right font-mono text-[11px] font-bold tabular-nums text-subtle">
                 {idx + 1}.
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[11px] font-medium text-gray-700 group-hover:text-gray-900">
+                  <span className="transition-base truncate text-[11px] font-medium text-muted-foreground group-hover:text-foreground">
                     {r.city}
                   </span>
-                  <span className="shrink-0 text-[11px] font-semibold tabular-nums text-gray-900">
+                  <span className="text-data-sm shrink-0 text-foreground">
                     {fmtMoney(r.avgRevpar)}
                   </span>
                 </span>
-                <span className="mt-0.5 flex h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <span className="mt-0.5 flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <span
-                    className="h-full bg-blue-500 transition-colors group-hover:bg-blue-700"
+                    className="transition-base h-full bg-[hsl(var(--accent))] group-hover:bg-ink"
                     style={{ width: `${Math.max(w, 3)}%` }}
                   />
                 </span>
@@ -521,7 +526,7 @@ function RevenueConcentration({ inScope }: { inScope: HotelFeature[] }) {
 
   if (totalRevenue === null || concentrated === null) {
     return (
-      <p className="text-[11px] leading-snug text-gray-400">
+      <p className="text-[11px] leading-snug text-subtle">
         No revenue data available for the current selection.
       </p>
     );
@@ -532,21 +537,23 @@ function RevenueConcentration({ inScope }: { inScope: HotelFeature[] }) {
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
-        <span className="text-[11px] font-medium text-gray-700">
+        <span className="text-[11px] font-medium text-muted-foreground">
           Top {topPct}% of hotels
         </span>
-        <span className="text-[13px] font-bold text-gray-900">
+        <span className="text-data-sm text-foreground">
           {concentrationPct.toFixed(1)}%
         </span>
       </div>
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
         <span
-          className="h-full bg-purple-500"
+          className="h-full bg-[hsl(var(--accent))]"
           style={{ width: `${Math.min(concentrationPct, 100)}%` }}
         />
       </div>
-      <p className="text-[10px] text-gray-500">
-        {fmtMoney(concentrated)} of {fmtMoney(totalRevenue)} total revenue
+      <p className="text-[10px] text-subtle">
+        <span className="font-mono tabular-nums">{fmtMoney(concentrated)}</span> of{" "}
+        <span className="font-mono tabular-nums">{fmtMoney(totalRevenue)}</span> total
+        revenue
       </p>
     </div>
   );
@@ -566,19 +573,23 @@ export default function AnalyticsPanel({
   const outliers = computeOutliers(inScope);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white/95 shadow-card ring-1 ring-black/5 backdrop-blur">
-      <div className="border-b border-gray-100 p-3">
+    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface shadow-card ring-1 ring-border backdrop-blur">
+      <div className="border-b border-border p-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Analytics
-          </h2>
-          <span className="text-[11px] tabular-nums text-gray-400">
+          <h2 className="label-overline">Analytics</h2>
+          <span className="font-mono text-[11px] tabular-nums text-subtle">
             {stats.total.toLocaleString()} in view
           </span>
         </div>
-        <p className="mt-1 text-[11px] leading-snug text-gray-400">
-          {stats.total.toLocaleString()} hotels in view ·{" "}
-          {stats.withRevpar.toLocaleString()} with RevPAR data
+        <p className="mt-1 text-[11px] leading-snug text-subtle">
+          <span className="font-mono tabular-nums">
+            {stats.total.toLocaleString()}
+          </span>{" "}
+          hotels in view ·{" "}
+          <span className="font-mono tabular-nums">
+            {stats.withRevpar.toLocaleString()}
+          </span>{" "}
+          with RevPAR data
         </p>
       </div>
 
@@ -593,7 +604,7 @@ export default function AnalyticsPanel({
             <section>
               <SectionHeading>RevPAR distribution</SectionHeading>
               {revpars.length === 0 ? (
-                <p className="text-[11px] leading-snug text-gray-400">
+                <p className="text-[11px] leading-snug text-subtle">
                   No RevPAR data in the current selection.
                 </p>
               ) : (

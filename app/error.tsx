@@ -16,18 +16,18 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-[#eceff1] p-8">
-      <div className="max-w-md rounded-2xl bg-white p-6 text-center shadow-card">
-        <h1 className="text-lg font-semibold text-gray-900">
+    <div className="flex h-screen w-screen items-center justify-center bg-background p-8">
+      <div className="max-w-md rounded-panel bg-surface p-6 text-center shadow-lg ring-1 ring-border">
+        <h1 className="text-display">
           Something went wrong rendering the map
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-meta text-muted-foreground">
           A client-side error occurred. This is usually transient.
         </p>
         <button
           type="button"
           onClick={reset}
-          className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+          className="transition-base mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink-hover"
         >
           Reload the map
         </button>

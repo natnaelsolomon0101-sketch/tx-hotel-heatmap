@@ -59,17 +59,19 @@ function DualRange({
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[11px] font-medium text-gray-600">{label}</span>
-        <span className="text-[11px] tabular-nums text-gray-500">
-          {format(lo)} <span className="text-gray-300">–</span> {format(hi)}
+        <span className="text-[11px] font-medium text-muted-foreground">
+          {label}
+        </span>
+        <span className="font-mono tabular-nums text-foreground text-meta">
+          {format(lo)} <span className="text-subtle">–</span> {format(hi)}
         </span>
       </div>
       <div className="relative h-4">
         {/* base track */}
-        <span className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-gray-200" />
+        <span className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
         {/* selected span */}
         <span
-          className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-blue-500"
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-accent transition-base"
           style={{ left: `${loPct}%`, right: `${100 - hiPct}%` }}
         />
         <input
@@ -109,9 +111,10 @@ function DualRange({
           width: 14px;
           border-radius: 9999px;
           background: #ffffff;
-          border: 2px solid #3b82f6;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+          border: 1px solid hsl(var(--accent));
+          box-shadow: var(--shadow-pop);
           cursor: pointer;
+          transition: box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
         }
         .range-thumb::-moz-range-thumb {
           pointer-events: auto;
@@ -119,16 +122,26 @@ function DualRange({
           width: 14px;
           border-radius: 9999px;
           background: #ffffff;
-          border: 2px solid #3b82f6;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+          border: 1px solid hsl(var(--accent));
+          box-shadow: var(--shadow-pop);
           cursor: pointer;
+          transition: box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .range-thumb:focus-visible {
+          outline: none;
+        }
+        .range-thumb:focus-visible::-webkit-slider-thumb {
+          box-shadow: var(--shadow-pop), 0 0 0 2px hsl(var(--ring));
+        }
+        .range-thumb:focus-visible::-moz-range-thumb {
+          box-shadow: var(--shadow-pop), 0 0 0 2px hsl(var(--ring));
         }
         .range-thumb:disabled::-webkit-slider-thumb {
-          border-color: #cbd5e1;
+          border-color: hsl(var(--border-strong));
           cursor: default;
         }
         .range-thumb:disabled::-moz-range-thumb {
-          border-color: #cbd5e1;
+          border-color: hsl(var(--border-strong));
           cursor: default;
         }
         .range-thumb::-moz-range-track {
@@ -162,17 +175,17 @@ export default function RangeFilters({
   const roomsStep = Math.max(1, Math.round((roomsMax - roomsMin) / 200));
 
   return (
-    <div className="hidden shrink-0 rounded-2xl bg-white/95 p-3 shadow-card ring-1 ring-black/5 backdrop-blur md:block">
+    <div className="hidden shrink-0 rounded-panel bg-surface p-3 shadow-sm ring-1 ring-border md:block">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Range filters
-        </h2>
+        <h2 className="label-overline">Range filters</h2>
         <button
           type="button"
           onClick={onReset}
           disabled={atDefaults}
-          className={`text-xs font-medium ${
-            atDefaults ? "text-gray-300" : "text-blue-600 hover:underline"
+          className={`text-xs font-medium transition-base ${
+            atDefaults
+              ? "text-subtle"
+              : "text-accent hover:text-[hsl(var(--accent-hover))]"
           }`}
         >
           Reset
@@ -200,7 +213,7 @@ export default function RangeFilters({
         />
       </div>
 
-      <p className="mt-2 border-t border-gray-100 pt-2 text-[11px] leading-snug text-gray-400">
+      <p className="mt-2 border-t border-border pt-2 text-meta leading-snug text-subtle">
         Hotels with no RevPAR or room count are hidden once a range is narrowed.
       </p>
     </div>

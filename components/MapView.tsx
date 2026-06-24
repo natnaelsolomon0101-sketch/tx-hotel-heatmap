@@ -468,14 +468,14 @@ function HoverTooltip({ info }: { info: HoverInfo | null }) {
   const rooms = p.rooms != null ? `${p.rooms.toLocaleString()} rooms` : "Rooms n/a";
   return (
     <div
-      className="pointer-events-none absolute z-50 w-[150px] rounded-lg bg-white/90 p-2 shadow-card ring-1 ring-black/5 backdrop-blur print:hidden"
+      className="pointer-events-none absolute z-50 w-[150px] rounded-lg bg-surface p-2 shadow-md ring-1 ring-border print:hidden"
       style={{ left: info.x + 12, top: info.y + 12 }}
     >
-      <div className="truncate text-xs font-semibold text-gray-900">
+      <div className="truncate text-xs font-semibold text-foreground">
         {p.name}
       </div>
-      <div className="mt-0.5 font-mono text-xs text-gray-700">{revpar}</div>
-      <div className="text-[11px] text-gray-500">{rooms}</div>
+      <div className="mt-0.5 font-mono text-xs text-muted-foreground">{revpar}</div>
+      <div className="text-[11px] text-subtle">{rooms}</div>
     </div>
   );
 }
@@ -1241,14 +1241,14 @@ export default function MapView() {
 
   if (!GOOGLE_KEY) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#eceff1] p-8">
-        <div className="max-w-md rounded-2xl bg-white p-6 text-center shadow-card">
-          <h1 className="text-lg font-semibold text-gray-900">
+      <div className="flex h-screen w-screen items-center justify-center bg-background p-8">
+        <div className="max-w-md rounded-panel bg-surface p-6 text-center shadow-lg ring-1 ring-border">
+          <h1 className="text-display">
             Google Maps key missing
           </h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-meta text-muted-foreground">
             Set{" "}
-            <code className="rounded bg-gray-100 px-1">
+            <code className="rounded bg-muted px-1">
               NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
             </code>{" "}
             in your environment (and in Vercel) to render the map.
@@ -1260,16 +1260,16 @@ export default function MapView() {
 
   if (mapsApiError) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#eceff1] p-8">
-        <div className="max-w-md rounded-2xl bg-white p-6 text-center shadow-card">
-          <h1 className="text-lg font-semibold text-gray-900">
+      <div className="flex h-screen w-screen items-center justify-center bg-background p-8">
+        <div className="max-w-md rounded-panel bg-surface p-6 text-center shadow-lg ring-1 ring-border">
+          <h1 className="text-display">
             Google Maps failed to load
           </h1>
-          <p className="mt-2 text-sm text-gray-600">{mapsApiError}</p>
+          <p className="mt-2 text-meta text-muted-foreground">{mapsApiError}</p>
           <button
             type="button"
             onClick={() => setMapsApiError(null)}
-            className="mt-4 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700"
+            className="transition-base mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink-hover"
           >
             Retry
           </button>
@@ -1367,7 +1367,7 @@ export default function MapView() {
               darkMode ? "Switch to light mode" : "Switch to dark mode"
             }
             title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow-card ring-1 ring-black/5 backdrop-blur transition hover:bg-gray-100 dark:bg-gray-800/95 dark:text-gray-200 dark:ring-white/10 dark:hover:bg-gray-700"
+            className="transition-base flex h-9 w-9 items-center justify-center rounded-full bg-surface text-muted-foreground shadow-md ring-1 ring-border hover:bg-muted hover:text-foreground"
           >
             {darkMode ? (
               // sun
@@ -1422,7 +1422,7 @@ export default function MapView() {
       </div>
 
       <div
-        className={`absolute z-20 flex flex-col gap-2 print:hidden
+        className={`absolute z-20 flex flex-col gap-2.5 print:hidden
           inset-x-2 bottom-2 max-h-[60vh]
           md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3 ${
             svOpen ? "hidden" : ""
@@ -1432,14 +1432,14 @@ export default function MapView() {
         <button
           type="button"
           onClick={() => setSheetOpen((o) => !o)}
-          className="flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-white/95 py-2 text-xs font-medium text-gray-600 shadow-card ring-1 ring-black/5 backdrop-blur md:hidden"
+          className="flex shrink-0 items-center justify-center gap-2 rounded-panel bg-surface py-2 text-xs font-medium text-muted-foreground shadow-md ring-1 ring-border md:hidden"
         >
-          <span className="h-1 w-8 rounded-full bg-gray-300" />
+          <span className="h-1 w-8 rounded-full bg-border-strong" />
           {sheetOpen ? "Hide panel" : `Show ${listData.total.toLocaleString()} properties`}
         </button>
 
         <div
-          className={`min-h-0 flex-col gap-2 md:flex md:gap-3 ${
+          className={`min-h-0 flex-col gap-2.5 md:flex md:gap-3 ${
             sheetOpen ? "flex flex-1" : "hidden"
           }`}
         >
@@ -1501,7 +1501,7 @@ export default function MapView() {
           />
         ) : (
           <>
-            <div className="flex shrink-0 gap-0.5 rounded-2xl bg-white/95 p-1 shadow-card ring-1 ring-black/5 backdrop-blur">
+            <div className="flex shrink-0 gap-0.5 rounded-panel bg-surface p-1 shadow-md ring-1 ring-border">
               {([
                 ["list", "Properties"],
                 ["markets", "Markets"],
@@ -1513,10 +1513,10 @@ export default function MapView() {
                   key={id}
                   type="button"
                   onClick={() => setRightTab(id)}
-                  className={`flex-1 whitespace-nowrap rounded-xl px-1.5 py-1.5 text-[11px] font-medium transition ${
+                  className={`transition-base flex-1 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-medium ${
                     rightTab === id
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-600 hover:bg-gray-100"
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {label}
@@ -1611,7 +1611,7 @@ export default function MapView() {
       )}
 
       {dataError && (
-        <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-card print:hidden">
+        <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full bg-ink px-4 py-2 text-xs text-white shadow-md print:hidden">
           <span>
             No hotel data loaded yet — run{" "}
             <code className="font-mono">npm run build-data</code> to generate

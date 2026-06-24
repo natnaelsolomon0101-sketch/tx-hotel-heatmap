@@ -1,6 +1,6 @@
 "use client";
 
-import { Bucket, BUCKET_COLORS } from "@/lib/types";
+import { Bucket } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 
 type LegendFilterProps = {
@@ -13,10 +13,34 @@ type LegendFilterProps = {
   revparCutoffs?: [number, number];
 };
 
-const ROWS: { bucket: Bucket; title: string; sub: string }[] = [
-  { bucket: "red", title: "High RevPAR", sub: "Top third of portfolio" },
-  { bucket: "yellow", title: "Mid RevPAR", sub: "Middle third" },
-  { bucket: "gray", title: "Low / no data", sub: "Bottom third + missing" },
+const ROWS: {
+  bucket: Bucket;
+  title: string;
+  sub: string;
+  swatch: string;
+  soft: string;
+}[] = [
+  {
+    bucket: "red",
+    title: "High RevPAR",
+    sub: "Top third of portfolio",
+    swatch: "bg-revpar-high",
+    soft: "bg-revpar-high-soft text-revpar-high ring-revpar-high",
+  },
+  {
+    bucket: "yellow",
+    title: "Mid RevPAR",
+    sub: "Middle third",
+    swatch: "bg-revpar-mid",
+    soft: "bg-revpar-mid-soft text-revpar-mid ring-revpar-mid",
+  },
+  {
+    bucket: "gray",
+    title: "Low / no data",
+    sub: "Bottom third + missing",
+    swatch: "bg-revpar-low",
+    soft: "bg-revpar-low-soft text-revpar-low ring-revpar-low",
+  },
 ];
 
 export default function LegendFilter({
@@ -35,16 +59,16 @@ export default function LegendFilter({
     gray: null,
   };
   return (
-    <div className="shrink-0 rounded-2xl bg-white/95 p-2.5 shadow-card ring-1 ring-black/5 backdrop-blur md:p-3">
+    <div className="shrink-0 rounded-panel bg-surface p-2.5 shadow-sm ring-1 ring-border md:p-3">
       <div className="mb-1.5 flex items-center justify-between md:mb-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-          RevPAR scale
-        </h2>
+        <h2 className="label-overline">RevPAR scale</h2>
         <button
           type="button"
           onClick={onReset}
-          className={`text-xs font-medium ${
-            allOn ? "text-gray-300" : "text-blue-600 hover:underline"
+          className={`text-xs font-medium transition-base ${
+            allOn
+              ? "text-subtle"
+              : "text-accent hover:text-[hsl(var(--accent-hover))]"
           }`}
           disabled={allOn}
         >
@@ -54,28 +78,22 @@ export default function LegendFilter({
 
       {/* Compact horizontal chips on mobile so the property list keeps room. */}
       <div className="flex gap-1.5 md:hidden">
-        {ROWS.map(({ bucket, title }) => {
+        {ROWS.map(({ bucket, title, soft }) => {
           const on = active.has(bucket);
           return (
             <button
               key={bucket}
               type="button"
               onClick={() => onToggle(bucket)}
-              className={`flex flex-1 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left transition ${
-                on
-                  ? "border-gray-200 bg-white"
-                  : "border-transparent bg-gray-50 opacity-50"
+              className={`flex flex-1 items-center gap-1.5 rounded-full px-2 py-1.5 text-left transition-base ${soft} ${
+                on ? "ring-1 opacity-100" : "ring-0 opacity-50"
               }`}
             >
-              <span
-                className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
-                style={{ backgroundColor: BUCKET_COLORS[bucket] }}
-              />
               <span className="min-w-0">
-                <span className="block truncate text-[11px] font-medium leading-tight text-gray-700">
+                <span className="block truncate text-[11px] font-medium leading-tight">
                   {title.replace(" RevPAR", "")}
                 </span>
-                <span className="block text-[11px] tabular-nums leading-tight text-gray-400">
+                <span className="block text-[11px] font-mono tabular-nums leading-tight text-subtle">
                   {counts[bucket].toLocaleString()}
                 </span>
               </span>
@@ -86,33 +104,34 @@ export default function LegendFilter({
 
       {/* Detailed vertical legend on desktop. */}
       <div className="hidden flex-col gap-1 md:flex">
-        {ROWS.map(({ bucket, title, sub }) => {
+        {ROWS.map(({ bucket, title, sub, swatch }) => {
           const on = active.has(bucket);
           return (
             <button
               key={bucket}
               type="button"
               onClick={() => onToggle(bucket)}
-              className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition ${
-                on ? "hover:bg-gray-100" : "opacity-40 hover:opacity-70"
+              className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-base ${
+                on ? "hover:bg-muted" : "opacity-40 hover:opacity-70"
               }`}
             >
               <span
-                className="h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-white"
-                style={{ backgroundColor: BUCKET_COLORS[bucket] }}
+                className={`h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-surface ${swatch}`}
               />
               <span className="flex-1">
-                <span className="block text-sm font-medium text-gray-800">
+                <span className="block text-sm font-medium text-foreground">
                   {title}
                   {tierCutoff[bucket] && (
-                    <span className="ml-1 text-[11px] font-normal text-gray-400">
+                    <span className="ml-1 text-[11px] font-normal text-subtle">
                       {tierCutoff[bucket]}
                     </span>
                   )}
                 </span>
-                <span className="block text-[11px] text-gray-500">{sub}</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {sub}
+                </span>
               </span>
-              <span className="text-xs tabular-nums text-gray-400">
+              <span className="text-xs font-mono tabular-nums text-subtle">
                 {counts[bucket].toLocaleString()}
               </span>
             </button>
@@ -120,7 +139,7 @@ export default function LegendFilter({
         })}
       </div>
 
-      <p className="mt-2 hidden border-t border-gray-100 pt-2 text-[11px] leading-snug text-gray-400 md:block">
+      <p className="mt-2 hidden border-t border-border pt-2 text-meta leading-snug text-subtle md:block">
         {layerMode === "heatmap"
           ? "Heatmap intensity is weighted by RevPAR. Tap a row to filter."
           : "Tap a row to filter the map. RevPAR = period room revenue ÷ available rooms."}

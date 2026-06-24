@@ -40,17 +40,17 @@ function RailButton({
       title={label}
       aria-label={label}
       aria-pressed={active}
-      className={`group relative flex h-11 w-11 items-center justify-center rounded-xl transition
+      className={`group relative flex h-11 w-11 items-center justify-center rounded-md transition-base
         ${
           active
-            ? "bg-gray-900 text-white shadow-md"
-            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            ? "bg-ink text-white"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
         }`}
     >
       {children}
       <span
         className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md
-          bg-gray-900 px-2 py-1 text-xs text-white shadow-lg group-hover:block"
+          bg-ink px-2 py-1 text-meta text-white shadow-sm transition-base group-hover:block"
       >
         {label}
       </span>
@@ -71,7 +71,7 @@ export default function ToolRail({
 }: ToolRailProps) {
   return (
     <div className="absolute left-2 top-1/2 z-20 -translate-y-1/2 md:left-4">
-      <div className="flex flex-col items-center gap-1 rounded-2xl bg-white/95 p-1.5 shadow-card ring-1 ring-black/5 backdrop-blur">
+      <div className="flex flex-col items-center gap-1 rounded-lg bg-surface p-1.5 shadow-sm ring-1 ring-border backdrop-blur">
         <RailButton label="Recenter on Texas" onClick={onLocate}>
           <LocationIcon />
         </RailButton>
@@ -93,7 +93,7 @@ export default function ToolRail({
         >
           <RadiusIcon />
         </RailButton>
-        <div className="my-0.5 h-px w-7 bg-gray-200" />
+        <div className="my-0.5 h-px w-7 bg-border" />
         <RailButton
           label={
             layerMode === "heatmap"

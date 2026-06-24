@@ -9,7 +9,7 @@
 function Shimmer({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-md bg-gray-200/80 ${className}`}
+      className={`shimmer rounded-lg bg-muted ${className}`}
       aria-hidden
     />
   );
@@ -17,7 +17,7 @@ function Shimmer({ className = "" }: { className?: string }) {
 
 function Panel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-white/95 p-3 shadow-card ring-1 ring-black/5 backdrop-blur">
+    <div className="rounded-panel bg-surface/95 p-3 shadow-md ring-1 ring-border backdrop-blur">
       {children}
     </div>
   );
@@ -28,15 +28,15 @@ export default function MapSkeleton() {
     <div
       role="status"
       aria-label="Loading map"
-      className="relative h-screen w-screen overflow-hidden bg-[#eceff1]"
+      className="relative h-screen w-screen overflow-hidden bg-muted"
     >
       {/* faint moving sheen over the map area */}
-      <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#eceff1] via-[#f4f6f7] to-[#e4e8ea]" />
+      <div className="shimmer absolute inset-0" />
 
       {/* header bar mock — matches HeaderBar h-14 */}
-      <header className="absolute inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-black/5 bg-white/90 px-3 backdrop-blur md:px-4">
+      <header className="absolute inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-surface/90 px-3 backdrop-blur md:px-4">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 animate-pulse items-center justify-center rounded-lg bg-gray-900/90 text-white">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink text-white">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 21s-6-5.2-6-10a6 6 0 1 1 12 0c0 4.8-6 10-6 10z" />
               <circle cx="12" cy="11" r="2.2" fill="currentColor" stroke="none" />
@@ -115,7 +115,7 @@ export default function MapSkeleton() {
       {/* tool rail mock — left */}
       <div className="absolute left-4 top-[68px] z-20 hidden flex-col gap-2 md:flex">
         {[0, 1, 2].map((i) => (
-          <Shimmer key={i} className="h-9 w-9 rounded-xl bg-white/95 shadow-card" />
+          <Shimmer key={i} className="h-9 w-9 rounded-lg shadow-md" />
         ))}
       </div>
 
@@ -129,8 +129,8 @@ export default function MapSkeleton() {
 
       {/* centered status caption */}
       <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-        <div className="flex items-center gap-2 rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-medium text-gray-500 shadow-card ring-1 ring-black/5 backdrop-blur">
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 animate-spin text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <div className="flex items-center gap-2 rounded-full bg-surface/80 px-3 py-1.5 text-meta font-medium text-muted-foreground shadow-md ring-1 ring-border backdrop-blur">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 animate-spin text-subtle motion-reduce:animate-none" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 12a9 9 0 1 1-6.2-8.6" />
           </svg>
           Loading 10,655 Texas hotels…

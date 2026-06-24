@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+// Geist_Mono is only exported by next/font in Next 15+. This project is on
+// Next 14, so we use JetBrains_Mono (a clean, tabular geometric mono) under the
+// same --font-mono variable so all downstream `font-mono` consumers are unchanged.
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const geistMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "TX Hotel RevPAR Intelligence",
@@ -27,7 +31,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  themeColor: "#eceff1",
+  themeColor: "#F7F8FA",
 };
 
 export default function RootLayout({
@@ -36,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${geistMono.variable}`}>
       <body className="font-sans">{children}</body>
     </html>
   );

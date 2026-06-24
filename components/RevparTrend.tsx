@@ -47,11 +47,11 @@ export default function RevparTrend({
 
   if (pts.length < 2) {
     return (
-      <div className="mt-3 border-t border-gray-100 pt-3">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+      <div className="mt-3 border-t border-border pt-3">
+        <div className="label-overline">
           RevPAR trend
         </div>
-        <div className="mt-1 text-xs text-gray-400">
+        <div className="mt-1 text-meta text-subtle">
           Not enough history reported for this property.
         </div>
       </div>
@@ -83,14 +83,14 @@ export default function RevparTrend({
   const up = last.revpar >= first.revpar;
 
   return (
-    <div className="mt-3 border-t border-gray-100 pt-3">
+    <div className="mt-3 border-t border-border pt-3">
       <div className="flex items-baseline justify-between">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+        <div className="label-overline">
           RevPAR trend · {qLabel(first.q)}→{qLabel(last.q)}
         </div>
         <div
-          className={`text-[11px] font-semibold tabular-nums ${
-            up ? "text-emerald-600" : "text-rose-600"
+          className={`text-[11px] font-semibold font-mono tabular-nums ${
+            up ? "text-positive" : "text-negative"
           }`}
         >
           {up ? "▲" : "▼"} {Math.abs(deltaPct).toFixed(0)}%
@@ -105,15 +105,15 @@ export default function RevparTrend({
       >
         <defs>
           <linearGradient id="revpar-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#2563eb" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
+            <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={areaPath} fill="url(#revpar-fill)" />
         <path
           d={linePath}
           fill="none"
-          stroke="#2563eb"
+          stroke="hsl(var(--accent))"
           strokeWidth={1.75}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -126,8 +126,20 @@ export default function RevparTrend({
               cx={x(i)}
               cy={y(p.revpar)}
               r={isLast ? 3 : p.annual ? 2.6 : 1.9}
-              fill={p.partial ? "#fff" : isLast ? "#2563eb" : "#60a5fa"}
-              stroke={p.partial ? "#2563eb" : isLast ? "#1d4ed8" : "none"}
+              fill={
+                p.partial
+                  ? "hsl(var(--surface))"
+                  : isLast
+                    ? "hsl(var(--accent))"
+                    : "hsl(var(--accent) / 0.55)"
+              }
+              stroke={
+                p.partial
+                  ? "hsl(var(--accent))"
+                  : isLast
+                    ? "hsl(var(--accent-hover))"
+                    : "none"
+              }
               strokeWidth={p.partial ? 1.4 : isLast ? 1 : 0}
             >
               <title>
@@ -141,35 +153,35 @@ export default function RevparTrend({
         })}
       </svg>
 
-      <div className="mt-0.5 flex justify-between text-[9px] text-gray-400">
+      <div className="mt-0.5 flex justify-between font-mono text-[9px] text-subtle">
         <span>{qLabel(first.q)}</span>
         {pts.length > 2 && <span>{qLabel(pts[Math.floor(pts.length / 2)].q)}</span>}
         <span>{qLabel(last.q)}</span>
       </div>
 
-      <div className="mt-3 flex gap-3 rounded-lg bg-gray-50 px-3 py-2">
+      <div className="mt-3 flex gap-3 rounded-lg bg-muted px-3 py-2 ring-1 ring-border">
         <div className="flex-1">
-          <div className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+          <div className="label-overline">
             T12 Revenue
           </div>
-          <div className="text-base font-semibold tabular-nums text-gray-900">
+          <div className="text-data text-foreground">
             {compactMoney(t12Revenue)}
           </div>
         </div>
         <div className="flex-1">
-          <div className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+          <div className="label-overline">
             T12 RevPAR
-            <span className="ml-1 font-normal normal-case text-gray-300">
+            <span className="ml-1 font-normal normal-case text-subtle">
               avg/mo
             </span>
           </div>
-          <div className="text-base font-semibold tabular-nums text-gray-900">
+          <div className="text-data text-foreground">
             {money0(t12Revpar)}
           </div>
         </div>
       </div>
       {!t12Revenue && (
-        <div className="mt-1 text-[10px] text-gray-400">
+        <div className="mt-1 text-[10px] text-subtle">
           T12 needs four complete quarters; not all were reported for this property.
         </div>
       )}
