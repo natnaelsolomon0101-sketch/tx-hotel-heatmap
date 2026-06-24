@@ -25,7 +25,7 @@ export default function LegendFilter({
 }: LegendFilterProps) {
   const allOn = active.size === 3;
   return (
-    <div className="absolute right-4 top-4 z-20 w-60 rounded-2xl bg-white/95 p-3 shadow-card ring-1 ring-black/5 backdrop-blur">
+    <div className="shrink-0 rounded-2xl bg-white/95 p-3 shadow-card ring-1 ring-black/5 backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
           RevPAR scale

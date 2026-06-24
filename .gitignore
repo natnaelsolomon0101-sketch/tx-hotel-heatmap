@@ -33,3 +33,4 @@ yarn-error.log*
 /data/hotels.csv
 /data/geocache.json
 .vercel
+.gstack/

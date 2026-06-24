@@ -37,6 +37,19 @@ const CONFIG = {
   // don't already carry a RevPAR value (revenue / (rooms * daysInPeriod)).
   daysInPeriod: 31,
 
+  // Data-quality guards. The Comptroller file is full of aggregate / non-hotel
+  // filers that pollute "top performers" and skew the percentile cutoffs:
+  //   - city/county tax-collection rollups ("CITY OF GALVESTON")
+  //   - 1-room placeholder filings where rooms is a stand-in, not a count
+  //   - implausible RevPAR (a real TX hotel tops out near $15k/mo per room)
+  // Government rollups are dropped entirely; the others have RevPAR nulled
+  // (-> gray, sinks to the bottom of the list) rather than removed.
+  excludeNamePattern: /^\s*(city|county|town|village|state)\s+of\b/i,
+  minRooms: 2, // 1-room filings are placeholders, not real room counts
+  maxRevpar: 20000, // monthly RevPAR ceiling (~$650/night/room)
+
+
+
   // RevPAR bucket cutoffs, expressed as percentiles of the portfolio's RevPAR
   // distribution. >= red cutoff -> red (top third); >= yellow cutoff -> yellow
   // (middle third); everything else, plus missing data -> gray (bottom third).
@@ -309,6 +322,13 @@ async function main() {
     if (revpar == null && revenue != null && rooms && rooms > 0) {
       revpar = revenue / (rooms * CONFIG.daysInPeriod);
     }
+    // Reject untrusted RevPAR: 1-room placeholders and implausible highs.
+    if (
+      (rooms != null && rooms < CONFIG.minRooms) ||
+      (revpar != null && revpar > CONFIG.maxRevpar)
+    ) {
+      revpar = null;
+    }
     const flagged = revpar == null || rooms == null || revenue == null;
     if (flagged) flaggedCount++;
     return {
@@ -341,8 +361,11 @@ async function main() {
     );
   }
 
-  // Drop rows with no usable address (can't be placed) and require a name.
-  hotels = hotels.filter((h) => h.name && h.address);
+  // Drop rows with no usable address, no name, or that are government tax
+  // rollups rather than actual hotels.
+  hotels = hotels.filter(
+    (h) => h.name && h.address && !CONFIG.excludeNamePattern.test(h.name)
+  );
 
   // Dedupe by location, keeping the highest-revenue filing.
   const byLoc = new Map<string, Hotel>();

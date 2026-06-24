@@ -11,11 +11,17 @@ import Map, {
 } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { Bucket, HotelCollection, HotelProperties } from "@/lib/types";
+import {
+  Bucket,
+  HotelCollection,
+  HotelFeature,
+  HotelProperties,
+} from "@/lib/types";
 import ToolRail, { LayerMode } from "./ToolRail";
 import ZoomControls from "./ZoomControls";
 import LegendFilter from "./LegendFilter";
 import PropertyCard from "./PropertyCard";
+import PropertyList, { featureKey } from "./PropertyList";
 
 const TEXAS_CENTER = { longitude: -99.3, latitude: 31.3, zoom: 5.5 };
 
@@ -27,6 +33,9 @@ const MAP_TYPES = [
 ] as const;
 
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
+
+// Cap how many rows we put in the DOM for the scrollable list (perf).
+const LIST_LIMIT = 200;
 
 // ---- Layer styles --------------------------------------------------------
 
@@ -133,13 +142,18 @@ export default function MapView() {
   const mapRef = useRef<MapRef | null>(null);
   const [data, setData] = useState<HotelCollection | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<HotelProperties | null>(null);
+  const [selected, setSelected] = useState<HotelFeature | null>(null);
   const [layerMode, setLayerMode] = useState<LayerMode>("pins");
   const [mapTypeIndex, setMapTypeIndex] = useState(0);
   const [activeBuckets, setActiveBuckets] = useState<Set<Bucket>>(
     new Set(ALL_BUCKETS)
   );
   const [bearing, setBearing] = useState(0);
+  // Current map viewport [west, south, east, north]; drives the property list.
+  const [bounds, setBounds] = useState<
+    [number, number, number, number] | null
+  >(null);
+  const [query, setQuery] = useState("");
 
   // Load the geojson the pipeline produced.
   useEffect(() => {
@@ -190,6 +204,52 @@ export default function MapView() {
     };
   }, [filtered]);
 
+  // Properties for the scrollable list: filtered by bucket, then by the current
+  // viewport (or by search text), sorted best-RevPAR first.
+  const listData = useMemo(() => {
+    if (!filtered) return { rows: [] as HotelFeature[], total: 0 };
+    const q = query.trim().toLowerCase();
+    let feats = filtered.features;
+    if (q) {
+      feats = feats.filter(
+        (f) =>
+          f.properties.name.toLowerCase().includes(q) ||
+          f.properties.city.toLowerCase().includes(q)
+      );
+    } else if (bounds) {
+      const [w, s, e, n] = bounds;
+      feats = feats.filter((f) => {
+        const [lng, lat] = f.geometry.coordinates;
+        return lng >= w && lng <= e && lat >= s && lat <= n;
+      });
+    }
+    const sorted = [...feats].sort(
+      (a, b) => (b.properties.revpar ?? -1) - (a.properties.revpar ?? -1)
+    );
+    return { rows: sorted.slice(0, LIST_LIMIT), total: sorted.length };
+  }, [filtered, bounds, query]);
+
+  const updateBounds = useCallback(() => {
+    const m = mapRef.current?.getMap();
+    if (!m) return;
+    const b = m.getBounds();
+    setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+  }, []);
+
+  const flyToFeature = useCallback((f: HotelFeature) => {
+    setSelected(f);
+    const map = mapRef.current;
+    if (!map) return;
+    const [lng, lat] = f.geometry.coordinates as [number, number];
+    map.flyTo({
+      center: [lng, lat],
+      zoom: Math.max(map.getZoom(), 13),
+      duration: 700,
+    });
+  }, []);
+
+  const selectedKey = selected ? featureKey(selected) : null;
+
   const interactiveLayerIds =
     layerMode === "pins" ? ["clusters", "unclustered-point"] : [];
 
@@ -223,8 +283,13 @@ export default function MapView() {
     }
     // Individual hotel: open the property card.
     if (feature.layer?.id === "unclustered-point") {
-      setSelected(feature.properties as unknown as HotelProperties);
-      map_flyTo(mapRef, feature.geometry as GeoJSON.Point);
+      const hf: HotelFeature = {
+        type: "Feature",
+        geometry: feature.geometry as GeoJSON.Point,
+        properties: feature.properties as unknown as HotelProperties,
+      };
+      setSelected(hf);
+      map_flyTo(mapRef, hf.geometry);
     }
   }, []);
 
@@ -245,6 +310,8 @@ export default function MapView() {
         mapStyle={MAP_TYPES[mapTypeIndex].style}
         interactiveLayerIds={interactiveLayerIds}
         onClick={onClick}
+        onLoad={updateBounds}
+        onMoveEnd={updateBounds}
         onMove={(e) => setBearing(e.viewState.bearing)}
         attributionControl={false}
         style={{ width: "100%", height: "100%" }}
@@ -292,13 +359,24 @@ export default function MapView() {
         onRadius={() => {}}
       />
 
-      <LegendFilter
-        active={activeBuckets}
-        counts={counts}
-        onToggle={toggleBucket}
-        onReset={() => setActiveBuckets(new Set(ALL_BUCKETS))}
-        layerMode={layerMode}
-      />
+      <div className="absolute right-4 top-4 bottom-6 z-20 flex w-72 max-w-[78vw] flex-col gap-3">
+        <LegendFilter
+          active={activeBuckets}
+          counts={counts}
+          onToggle={toggleBucket}
+          onReset={() => setActiveBuckets(new Set(ALL_BUCKETS))}
+          layerMode={layerMode}
+        />
+        <PropertyList
+          rows={listData.rows}
+          total={listData.total}
+          limit={LIST_LIMIT}
+          query={query}
+          onQuery={setQuery}
+          onSelect={flyToFeature}
+          selectedKey={selectedKey}
+        />
+      </div>
 
       <ZoomControls
         bearing={bearing}
@@ -309,8 +387,11 @@ export default function MapView() {
         }
       />
 
-      {selected && layerMode === "pins" && (
-        <PropertyCard hotel={selected} onClose={() => setSelected(null)} />
+      {selected && (
+        <PropertyCard
+          hotel={selected.properties}
+          onClose={() => setSelected(null)}
+        />
       )}
 
       {dataError && (
