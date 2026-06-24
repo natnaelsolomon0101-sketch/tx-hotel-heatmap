@@ -14,7 +14,6 @@ import {
   Bucket,
   HotelCollection,
   HotelFeature,
-  HotelProperties,
 } from "@/lib/types";
 import ToolRail, { LayerMode } from "./ToolRail";
 import ZoomControls from "./ZoomControls";
@@ -23,6 +22,15 @@ import PropertyCard from "./PropertyCard";
 import PropertyList, { featureKey, SortKey } from "./PropertyList";
 import HeaderBar from "./HeaderBar";
 import { computeStats } from "@/lib/stats";
+import MarketPanel from "./MarketPanel";
+import { aggregateMarkets } from "@/lib/markets";
+import RangeFilters, { Range } from "./RangeFilters";
+import { decodeState, useUrlState, UrlState } from "@/lib/urlState";
+import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
+import ShortcutsHelp from "./ShortcutsHelp";
+import BriefButton from "./BriefButton";
+import PrintBrief from "./PrintBrief";
+import Coachmark from "./Coachmark";
 
 const GOOGLE_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -54,9 +62,7 @@ const BUCKET_RGBA: Record<Bucket, [number, number, number, number]> = {
 };
 
 // ---------------------------------------------------------------------------
-// GPU markers via deck.gl ScatterplotLayer — renders all 10k+ points at 60fps,
-// far faster than DOM markers. A single GoogleMapsOverlay is reused; only the
-// layer's data swaps when the filter changes.
+// GPU markers via deck.gl ScatterplotLayer.
 // ---------------------------------------------------------------------------
 function MarkersLayer({
   features,
@@ -70,7 +76,6 @@ function MarkersLayer({
   const map = useMap();
   const overlayRef = useRef<GoogleMapsOverlay | null>(null);
 
-  // Create the overlay once per map.
   useEffect(() => {
     if (!map) return;
     const overlay = new GoogleMapsOverlay({ interleaved: false });
@@ -82,7 +87,6 @@ function MarkersLayer({
     };
   }, [map]);
 
-  // Update the scatterplot layer when data / visibility changes.
   useEffect(() => {
     const overlay = overlayRef.current;
     if (!overlay) return;
@@ -129,7 +133,6 @@ function HeatLayer({
 }) {
   const map = useMap();
   const vis = useMapsLibrary("visualization");
-  // HeatmapLayer typing through the loader is unreliable; use a loose ref.
   const layerRef = useRef<{ setMap: (m: google.maps.Map | null) => void } | null>(
     null
   );
@@ -225,19 +228,39 @@ function MapController({
 // Main
 // ---------------------------------------------------------------------------
 export default function MapView() {
+  // Read shared-link state once, synchronously, so first paint matches the URL.
+  const initialUrlState = useRef(
+    typeof window === "undefined" ? {} : decodeState(window.location.search)
+  ).current;
+
   const [data, setData] = useState<HotelCollection | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const [selected, setSelected] = useState<HotelFeature | null>(null);
-  const [layerMode, setLayerMode] = useState<LayerMode>("pins");
-  const [mapTypeIndex, setMapTypeIndex] = useState(0);
+  const [layerMode, setLayerMode] = useState<LayerMode>(
+    initialUrlState.layer ?? "pins"
+  );
+  const [mapTypeIndex, setMapTypeIndex] = useState(
+    initialUrlState.mapType != null && initialUrlState.mapType < MAP_TYPES.length
+      ? initialUrlState.mapType
+      : 0
+  );
   const [activeBuckets, setActiveBuckets] = useState<Set<Bucket>>(
-    new Set(ALL_BUCKETS)
+    initialUrlState.buckets && initialUrlState.buckets.length > 0
+      ? new Set(initialUrlState.buckets)
+      : new Set(ALL_BUCKETS)
   );
   const [bounds, setBounds] = useState<
     [number, number, number, number] | null
   >(null);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("revpar-desc");
+  const [query, setQuery] = useState(initialUrlState.q ?? "");
+  const [sort, setSort] = useState<SortKey>(
+    initialUrlState.sort ?? "revpar-desc"
+  );
+  const [rightTab, setRightTab] = useState<"list" | "markets">("list");
+  const [revparRange, setRevparRange] = useState<Range | null>(null);
+  const [roomsRange, setRoomsRange] = useState<Range | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const controls = useRef<{
     zoomIn: () => void;
@@ -269,13 +292,70 @@ export default function MapView() {
     return c;
   }, [data]);
 
+  // Data-driven bounds for the range sliders (RevPAR is a small daily scale,
+  // rooms can spike into the thousands).
+  const ranges = useMemo(() => {
+    let rpLo = Infinity,
+      rpHi = -Infinity,
+      rmLo = Infinity,
+      rmHi = -Infinity;
+    data?.features.forEach((f) => {
+      const { revpar, rooms } = f.properties;
+      if (revpar != null) {
+        if (revpar < rpLo) rpLo = revpar;
+        if (revpar > rpHi) rpHi = revpar;
+      }
+      if (rooms != null) {
+        if (rooms < rmLo) rmLo = rooms;
+        if (rooms > rmHi) rmHi = rooms;
+      }
+    });
+    return {
+      revpar: [
+        Number.isFinite(rpLo) ? Math.floor(rpLo) : 0,
+        Number.isFinite(rpHi) ? Math.ceil(rpHi) : 0,
+      ] as Range,
+      rooms: [
+        Number.isFinite(rmLo) ? Math.floor(rmLo) : 0,
+        Number.isFinite(rmHi) ? Math.ceil(rmHi) : 0,
+      ] as Range,
+    };
+  }, [data]);
+
+  // Once bounds are known, default each slider to the full span.
+  useEffect(() => {
+    if (!data) return;
+    setRevparRange(ranges.revpar);
+    setRoomsRange(ranges.rooms);
+  }, [data, ranges]);
+
+  const revparVal = revparRange ?? ranges.revpar;
+  const roomsVal = roomsRange ?? ranges.rooms;
+
   const filtered = useMemo<HotelFeature[]>(() => {
     if (!data) return [];
-    if (activeBuckets.size === ALL_BUCKETS.length) return data.features;
-    return data.features.filter((f) => activeBuckets.has(f.properties.bucket));
-  }, [data, activeBuckets]);
+    const allBuckets = activeBuckets.size === ALL_BUCKETS.length;
+    const [rpLo, rpHi] = revparVal;
+    const [rmLo, rmHi] = roomsVal;
+    const rpActive = rpLo > ranges.revpar[0] || rpHi < ranges.revpar[1];
+    const rmActive = rmLo > ranges.rooms[0] || rmHi < ranges.rooms[1];
+    if (allBuckets && !rpActive && !rmActive) return data.features;
+    return data.features.filter((f) => {
+      const p = f.properties;
+      if (!allBuckets && !activeBuckets.has(p.bucket)) return false;
+      if (rpActive) {
+        if (p.revpar == null) return false;
+        if (p.revpar < rpLo || p.revpar > rpHi) return false;
+      }
+      if (rmActive) {
+        if (p.rooms == null) return false;
+        if (p.rooms < rmLo || p.rooms > rmHi) return false;
+      }
+      return true;
+    });
+  }, [data, activeBuckets, revparVal, roomsVal, ranges]);
 
-  // In-scope set: bucket filter + (search text OR current viewport).
+  // In-scope set: bucket/range filter + (search text OR current viewport).
   const inScope = useMemo(() => {
     const q = query.trim().toLowerCase();
     let feats = filtered;
@@ -301,22 +381,13 @@ export default function MapView() {
   );
 
   const stats = useMemo(() => computeStats(inScope), [inScope]);
+  const briefRows = useMemo(() => inScope.slice(0, 25), [inScope]);
+  const marketRows = useMemo(() => aggregateMarkets(filtered), [filtered]);
 
   const exportCsv = useCallback(() => {
     const header = [
-      "name",
-      "address",
-      "city",
-      "state",
-      "zip",
-      "rooms",
-      "revpar",
-      "adr",
-      "occupancy",
-      "revenue",
-      "bucket",
-      "lng",
-      "lat",
+      "name", "address", "city", "state", "zip", "rooms", "revpar",
+      "adr", "occupancy", "revenue", "bucket", "lng", "lat",
     ];
     const esc = (v: unknown) => {
       const s = v == null ? "" : String(v);
@@ -350,6 +421,24 @@ export default function MapView() {
     controls.current?.flyTo(lng, lat);
   }, []);
 
+  const selectMarket = useCallback(
+    (city: string) => {
+      setSelected(null);
+      setQuery(city);
+      setRightTab("list");
+      const hit = filtered.find(
+        (f) =>
+          (f.properties.city || "").trim().toLowerCase() ===
+          city.trim().toLowerCase()
+      );
+      if (hit) {
+        const [lng, lat] = hit.geometry.coordinates;
+        controls.current?.flyTo(lng, lat);
+      }
+    },
+    [filtered]
+  );
+
   const toggleBucket = (b: Bucket) =>
     setActiveBuckets((prev) => {
       const next = new Set(prev);
@@ -359,10 +448,60 @@ export default function MapView() {
       return next;
     });
 
+  const resetAll = useCallback(() => {
+    setActiveBuckets(new Set(ALL_BUCKETS));
+    setRevparRange(ranges.revpar);
+    setRoomsRange(ranges.rooms);
+    setQuery("");
+  }, [ranges]);
+
+  const hasFilters =
+    activeBuckets.size < ALL_BUCKETS.length ||
+    revparVal[0] > ranges.revpar[0] ||
+    revparVal[1] < ranges.revpar[1] ||
+    roomsVal[0] > ranges.rooms[0] ||
+    roomsVal[1] < ranges.rooms[1];
+
   const selectedKey = selected ? featureKey(selected) : null;
   const registerControls = useCallback((api: typeof controls.current) => {
     controls.current = api;
   }, []);
+
+  // Keep the address bar in sync with the view (debounced, no navigation).
+  const urlState: UrlState = useMemo(
+    () => ({
+      buckets: ALL_BUCKETS.filter((b) => activeBuckets.has(b)),
+      layer: layerMode,
+      mapType: mapTypeIndex,
+      sort,
+      q: query,
+    }),
+    [activeBuckets, layerMode, mapTypeIndex, sort, query]
+  );
+
+  useUrlState(urlState, (partial) => {
+    if (partial.layer) setLayerMode(partial.layer);
+    if (partial.mapType != null && partial.mapType < MAP_TYPES.length)
+      setMapTypeIndex(partial.mapType);
+    if (partial.buckets && partial.buckets.length > 0)
+      setActiveBuckets(new Set(partial.buckets));
+    if (partial.sort) setSort(partial.sort);
+    if (partial.q != null) setQuery(partial.q);
+  });
+
+  useKeyboardShortcuts({
+    onSearch: () => searchInputRef.current?.focus(),
+    onToggleLayers: () => {
+      setSelected(null);
+      setLayerMode((m) => (m === "pins" ? "heatmap" : "pins"));
+    },
+    onRecenter: () => controls.current?.recenter(),
+    onEscape: () => {
+      if (helpOpen) setHelpOpen(false);
+      else setSelected(null);
+    },
+    onToggleHelp: () => setHelpOpen((v) => !v),
+  });
 
   if (!GOOGLE_KEY) {
     return (
@@ -385,47 +524,58 @@ export default function MapView() {
 
   return (
     <div className="relative h-screen w-screen">
-      <APIProvider apiKey={GOOGLE_KEY}>
-        <Map
-          defaultCenter={TEXAS_CENTER}
-          defaultZoom={TEXAS_ZOOM}
-          gestureHandling="greedy"
-          disableDefaultUI
-          clickableIcons={false}
-          style={{ width: "100%", height: "100%" }}
-          onClick={() => setSelected(null)}
-        >
-          <MapController
-            mapTypeId={MAP_TYPES[mapTypeIndex].id}
-            onBounds={setBounds}
-            registerControls={registerControls}
-          />
-          <MarkersLayer
-            features={filtered}
-            visible={layerMode === "pins"}
-            onSelect={flyToFeature}
-          />
-          <HeatLayer features={filtered} visible={layerMode === "heatmap"} />
-        </Map>
-      </APIProvider>
+      <div className="absolute inset-0 print:hidden">
+        <APIProvider apiKey={GOOGLE_KEY}>
+          <Map
+            defaultCenter={TEXAS_CENTER}
+            defaultZoom={TEXAS_ZOOM}
+            gestureHandling="greedy"
+            disableDefaultUI
+            clickableIcons={false}
+            style={{ width: "100%", height: "100%" }}
+            onClick={() => setSelected(null)}
+          >
+            <MapController
+              mapTypeId={MAP_TYPES[mapTypeIndex].id}
+              onBounds={setBounds}
+              registerControls={registerControls}
+            />
+            <MarkersLayer
+              features={filtered}
+              visible={layerMode === "pins"}
+              onSelect={flyToFeature}
+            />
+            <HeatLayer features={filtered} visible={layerMode === "heatmap"} />
+          </Map>
+        </APIProvider>
+      </div>
 
-      <HeaderBar stats={stats} period={DATA_PERIOD} />
+      <div className="print:hidden">
+        <HeaderBar stats={stats} period={DATA_PERIOD} />
+        <div className="absolute right-3 top-2.5 z-40 md:right-4">
+          <BriefButton />
+        </div>
+      </div>
 
-      <ToolRail
-        layerMode={layerMode}
-        mapTypeLabel={MAP_TYPES[mapTypeIndex].label}
-        onLocate={() => controls.current?.recenter()}
-        onToggleLayers={() => {
-          setSelected(null);
-          setLayerMode((m) => (m === "pins" ? "heatmap" : "pins"));
-        }}
-        onCycleMapType={() => setMapTypeIndex((i) => (i + 1) % MAP_TYPES.length)}
-        onPolygon={() => {}}
-        onRadius={() => {}}
-      />
+      <div className="print:hidden">
+        <ToolRail
+          layerMode={layerMode}
+          mapTypeLabel={MAP_TYPES[mapTypeIndex].label}
+          onLocate={() => controls.current?.recenter()}
+          onToggleLayers={() => {
+            setSelected(null);
+            setLayerMode((m) => (m === "pins" ? "heatmap" : "pins"));
+          }}
+          onCycleMapType={() =>
+            setMapTypeIndex((i) => (i + 1) % MAP_TYPES.length)
+          }
+          onPolygon={() => {}}
+          onRadius={() => {}}
+        />
+      </div>
 
       <div
-        className="absolute z-20 flex flex-col gap-2
+        className="absolute z-20 flex flex-col gap-2 print:hidden
           inset-x-2 bottom-2 max-h-[52vh]
           md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3"
       >
@@ -436,26 +586,68 @@ export default function MapView() {
           onReset={() => setActiveBuckets(new Set(ALL_BUCKETS))}
           layerMode={layerMode}
         />
-        <PropertyList
-          rows={listData.rows}
-          total={listData.total}
-          limit={LIST_LIMIT}
-          query={query}
-          onQuery={setQuery}
-          onSelect={flyToFeature}
-          selectedKey={selectedKey}
-          sort={sort}
-          onSort={setSort}
-          onExport={exportCsv}
+        <RangeFilters
+          revparMin={ranges.revpar[0]}
+          revparMax={ranges.revpar[1]}
+          revpar={revparVal}
+          onRevparChange={setRevparRange}
+          roomsMin={ranges.rooms[0]}
+          roomsMax={ranges.rooms[1]}
+          rooms={roomsVal}
+          onRoomsChange={setRoomsRange}
+          onReset={() => {
+            setRevparRange(ranges.revpar);
+            setRoomsRange(ranges.rooms);
+          }}
         />
+        <div className="flex shrink-0 gap-1 rounded-2xl bg-white/95 p-1 shadow-card ring-1 ring-black/5 backdrop-blur">
+          {([
+            ["list", "Properties"],
+            ["markets", "Markets"],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setRightTab(id)}
+              className={`flex-1 rounded-xl px-3 py-1.5 text-xs font-medium transition ${
+                rightTab === id
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {rightTab === "list" ? (
+          <PropertyList
+            rows={listData.rows}
+            total={listData.total}
+            limit={LIST_LIMIT}
+            query={query}
+            onQuery={setQuery}
+            onSelect={flyToFeature}
+            selectedKey={selectedKey}
+            sort={sort}
+            onSort={setSort}
+            onExport={exportCsv}
+            searchInputRef={searchInputRef}
+            onClear={resetAll}
+            hasFilters={hasFilters}
+          />
+        ) : (
+          <MarketPanel rows={marketRows} onSelectMarket={selectMarket} />
+        )}
       </div>
 
-      <ZoomControls
-        bearing={0}
-        onZoomIn={() => controls.current?.zoomIn()}
-        onZoomOut={() => controls.current?.zoomOut()}
-        onResetNorth={() => controls.current?.resetNorth()}
-      />
+      <div className="print:hidden">
+        <ZoomControls
+          bearing={0}
+          onZoomIn={() => controls.current?.zoomIn()}
+          onZoomOut={() => controls.current?.zoomOut()}
+          onResetNorth={() => controls.current?.resetNorth()}
+        />
+      </div>
 
       {selected && (
         <PropertyCard
@@ -465,12 +657,16 @@ export default function MapView() {
       )}
 
       {dataError && (
-        <div className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-card">
+        <div className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-card print:hidden">
           No hotel data loaded yet — run{" "}
           <code className="font-mono">npm run build-data</code> to generate
           public/hotels.geojson.
         </div>
       )}
+
+      <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <PrintBrief stats={stats} topRows={briefRows} period={DATA_PERIOD} />
+      <Coachmark />
     </div>
   );
 }

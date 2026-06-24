@@ -20,3 +20,24 @@ body {
 .gm-style .gm-style-iw-c {
   display: none;
 }
+
+/* Printable Market Brief: unlock the locked-down screen body so the brief flows
+   as a normal page; everything else carries the Tailwind `print:hidden` class. */
+@media print {
+  html,
+  body,
+  #__next {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  .print-brief {
+    position: static;
+    width: 100%;
+    padding: 0;
+    font-size: 12px;
+  }
+  @page {
+    margin: 0.6in;
+  }
+}

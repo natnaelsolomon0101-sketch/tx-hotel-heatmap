@@ -1,6 +1,8 @@
 "use client";
 
+import { RefObject } from "react";
 import { BUCKET_COLORS, HotelFeature } from "@/lib/types";
+import EmptyState from "@/components/EmptyState";
 
 export type SortKey = "revpar-desc" | "revpar-asc" | "rooms-desc" | "name-asc";
 
@@ -22,6 +24,9 @@ type PropertyListProps = {
   sort: SortKey;
   onSort: (s: SortKey) => void;
   onExport: () => void;
+  searchInputRef?: RefObject<HTMLInputElement>;
+  onClear?: () => void;
+  hasFilters?: boolean;
 };
 
 const titleCase = (s: string) =>
@@ -52,6 +57,9 @@ export default function PropertyList({
   sort,
   onSort,
   onExport,
+  searchInputRef,
+  onClear,
+  hasFilters,
 }: PropertyListProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white/95 shadow-card ring-1 ring-black/5 backdrop-blur">
@@ -68,6 +76,7 @@ export default function PropertyList({
         </div>
         <div className="relative">
           <input
+            ref={searchInputRef}
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             placeholder="Search hotel or city…"
@@ -113,9 +122,23 @@ export default function PropertyList({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {rows.length === 0 ? (
-          <p className="p-4 text-sm text-gray-400">
-            No properties here. Zoom out, pan, or clear the search.
-          </p>
+          <EmptyState
+            title="No properties match"
+            message={
+              query
+                ? `Nothing matches “${query}” in the current view.`
+                : "No hotels here. Zoom out or pan the map."
+            }
+            onClear={
+              hasFilters || query
+                ? () => {
+                    onQuery("");
+                    onClear?.();
+                  }
+                : undefined
+            }
+            clearLabel={query && !hasFilters ? "Clear search" : "Clear filters"}
+          />
         ) : (
           <ul className="divide-y divide-gray-100">
             {rows.map((f, i) => {

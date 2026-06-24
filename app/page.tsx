@@ -1,13 +1,10 @@
 import dynamic from "next/dynamic";
+import MapSkeleton from "@/components/MapSkeleton";
 
-// react-map-gl / mapbox-gl touch `window` on import, so the map must be client-only.
+// The map (Google Maps + deck.gl) touches `window` on import, so it's client-only.
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-screen w-screen items-center justify-center bg-[#eceff1] text-sm text-gray-500">
-      Loading map…
-    </div>
-  ),
+  loading: () => <MapSkeleton />,
 });
 
 export default function Home() {
