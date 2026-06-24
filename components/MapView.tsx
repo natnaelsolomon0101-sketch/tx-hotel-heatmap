@@ -7,11 +7,11 @@ import {
   useMap,
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
-import { MarkerClusterer } from "@googlemaps/markerclusterer";
+import { GoogleMapsOverlay } from "@deck.gl/google-maps";
+import { ScatterplotLayer } from "@deck.gl/layers";
 
 import {
   Bucket,
-  BUCKET_COLORS,
   HotelCollection,
   HotelFeature,
   HotelProperties,
@@ -35,8 +35,17 @@ const MAP_TYPES = [
   { label: "Terrain", id: "terrain" },
 ] as const;
 
+// RevPAR bucket colors as RGBA for deck.gl.
+const BUCKET_RGBA: Record<Bucket, [number, number, number, number]> = {
+  red: [238, 34, 51, 255],
+  yellow: [245, 179, 1, 255],
+  gray: [154, 160, 166, 230],
+};
+
 // ---------------------------------------------------------------------------
-// Markers + clustering layer (classic markers, colored by RevPAR bucket).
+// GPU markers via deck.gl ScatterplotLayer — renders all 10k+ points at 60fps,
+// far faster than DOM markers. A single GoogleMapsOverlay is reused; only the
+// layer's data swaps when the filter changes.
 // ---------------------------------------------------------------------------
 function MarkersLayer({
   features,
@@ -48,41 +57,51 @@ function MarkersLayer({
   onSelect: (f: HotelFeature) => void;
 }) {
   const map = useMap();
-  const clustererRef = useRef<MarkerClusterer | null>(null);
+  const overlayRef = useRef<GoogleMapsOverlay | null>(null);
 
+  // Create the overlay once per map.
   useEffect(() => {
-    if (!map || !window.google) return;
+    if (!map) return;
+    const overlay = new GoogleMapsOverlay({ interleaved: false });
+    overlay.setMap(map);
+    overlayRef.current = overlay;
+    return () => {
+      overlay.setMap(null);
+      overlayRef.current = null;
+    };
+  }, [map]);
 
+  // Update the scatterplot layer when data / visibility changes.
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
     if (!visible) {
-      clustererRef.current?.clearMarkers();
+      overlay.setProps({ layers: [] });
       return;
     }
-
-    const markers = features.map((f) => {
-      const [lng, lat] = f.geometry.coordinates;
-      const marker = new google.maps.Marker({
-        position: { lat, lng },
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          fillColor: BUCKET_COLORS[f.properties.bucket],
-          fillOpacity: 0.95,
-          scale: 5,
-          strokeColor: "#ffffff",
-          strokeWeight: 1.2,
-        },
-      });
-      marker.addListener("click", () => onSelect(f));
-      return marker;
+    const layer = new ScatterplotLayer<HotelFeature>({
+      id: "hotels",
+      data: features,
+      getPosition: (f) => f.geometry.coordinates as [number, number],
+      getFillColor: (f) => BUCKET_RGBA[f.properties.bucket],
+      getRadius: 5,
+      radiusUnits: "pixels",
+      radiusMinPixels: 2.5,
+      radiusMaxPixels: 8,
+      stroked: true,
+      lineWidthUnits: "pixels",
+      getLineWidth: 1,
+      getLineColor: [255, 255, 255, 230],
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: [255, 255, 255, 80],
+      onClick: (info) => {
+        if (info.object) onSelect(info.object as HotelFeature);
+      },
+      updateTriggers: { getFillColor: features },
     });
-
-    const clusterer = new MarkerClusterer({ map, markers });
-    clustererRef.current = clusterer;
-
-    return () => {
-      clusterer.clearMarkers();
-      markers.forEach((m) => m.setMap(null));
-    };
-  }, [map, features, visible, onSelect]);
+    overlay.setProps({ layers: [layer] });
+  }, [features, visible, onSelect]);
 
   return null;
 }
