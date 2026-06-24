@@ -197,6 +197,7 @@ function MapController({
   mapTypeId,
   onBounds,
   registerControls,
+  onStreetView,
 }: {
   mapTypeId: string;
   onBounds: (b: [number, number, number, number]) => void;
@@ -207,6 +208,7 @@ function MapController({
     recenter: () => void;
     flyTo: (lng: number, lat: number) => void;
   }) => void;
+  onStreetView: (visible: boolean) => void;
 }) {
   const map = useMap();
 
@@ -226,7 +228,15 @@ function MapController({
         position: google.maps.ControlPosition.LEFT_BOTTOM,
       },
     });
-  }, [map]);
+    // When the pegman opens Street View, tell MapView so it can clear the
+    // overlay UI + pins out of the way (otherwise they bury the panorama and
+    // its exit button).
+    const sv = map.getStreetView();
+    const l = sv.addListener("visible_changed", () =>
+      onStreetView(sv.getVisible())
+    );
+    return () => l.remove();
+  }, [map, onStreetView]);
 
   useEffect(() => {
     if (!map) return;
@@ -299,6 +309,8 @@ export default function MapView() {
   const [rollupDim, setRollupDim] = useState<RollupDim>("zip");
   // Mobile bottom-sheet collapse (desktop always shows the full side panel).
   const [sheetOpen, setSheetOpen] = useState(true);
+  // True while the Street View panorama is open — hide our overlay UI + pins.
+  const [svOpen, setSvOpen] = useState(false);
   const watchlist = useWatchlist();
   const [revparRange, setRevparRange] = useState<Range | null>(null);
   const [roomsRange, setRoomsRange] = useState<Range | null>(null);
@@ -782,13 +794,17 @@ export default function MapView() {
               mapTypeId={MAP_TYPES[mapTypeIndex].id}
               onBounds={setBounds}
               registerControls={registerControls}
+              onStreetView={setSvOpen}
             />
             <MarkersLayer
               features={filtered}
-              visible={layerMode === "pins"}
+              visible={layerMode === "pins" && !svOpen}
               onSelect={flyToFeature}
             />
-            <HeatLayer features={filtered} visible={layerMode === "heatmap"} />
+            <HeatLayer
+              features={filtered}
+              visible={layerMode === "heatmap" && !svOpen}
+            />
             <PolygonTool
               active={areaMode === "polygon"}
               vertices={polyVertices}
@@ -813,7 +829,7 @@ export default function MapView() {
         </APIProvider>
       </div>
 
-      <div className="print:hidden">
+      <div className={`print:hidden ${svOpen ? "hidden" : ""}`}>
         <HeaderBar stats={stats} period={DATA_PERIOD} />
         <div className="absolute right-3 top-2.5 z-40 flex items-center gap-2 md:right-4">
           <ShareButton
@@ -827,7 +843,7 @@ export default function MapView() {
         </div>
       </div>
 
-      <div className="print:hidden">
+      <div className={`print:hidden ${svOpen ? "hidden" : ""}`}>
         <ToolRail
           layerMode={layerMode}
           mapTypeLabel={MAP_TYPES[mapTypeIndex].label}
@@ -847,9 +863,11 @@ export default function MapView() {
       </div>
 
       <div
-        className="absolute z-20 flex flex-col gap-2 print:hidden
+        className={`absolute z-20 flex flex-col gap-2 print:hidden
           inset-x-2 bottom-2 max-h-[60vh]
-          md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3"
+          md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3 ${
+            svOpen ? "hidden" : ""
+          }`}
       >
         {/* Mobile grabber: collapse the sheet to reveal the map. */}
         <button
@@ -997,7 +1015,7 @@ export default function MapView() {
         </div>
       </div>
 
-      <div className="print:hidden">
+      <div className={`print:hidden ${svOpen ? "hidden" : ""}`}>
         <ZoomControls
           bearing={0}
           onZoomIn={() => controls.current?.zoomIn()}
@@ -1006,7 +1024,7 @@ export default function MapView() {
         />
       </div>
 
-      {selected && (
+      {selected && !svOpen && (
         <PropertyCard
           hotel={selected.properties}
           onClose={() => setSelected(null)}
@@ -1029,7 +1047,7 @@ export default function MapView() {
         </div>
       )}
 
-      {compare.length > 0 && (
+      {compare.length > 0 && !svOpen && (
         <CompareTray
           items={compare}
           sortedRevpars={sortedRevpars}
@@ -1042,7 +1060,7 @@ export default function MapView() {
 
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       <PrintBrief stats={stats} topRows={briefRows} period={DATA_PERIOD} />
-      <Coachmark />
+      {!svOpen && <Coachmark />}
     </div>
   );
 }
