@@ -1,18 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Map, {
-  Source,
-  Layer,
-  AttributionControl,
-  type MapRef,
-  type MapLayerMouseEvent,
-  type LayerProps,
-} from "react-map-gl/maplibre";
-import "maplibre-gl/dist/maplibre-gl.css";
+import {
+  APIProvider,
+  Map,
+  useMap,
+  useMapsLibrary,
+} from "@vis.gl/react-google-maps";
+import { MarkerClusterer } from "@googlemaps/markerclusterer";
 
 import {
   Bucket,
+  BUCKET_COLORS,
   HotelCollection,
   HotelFeature,
   HotelProperties,
@@ -23,123 +22,179 @@ import LegendFilter from "./LegendFilter";
 import PropertyCard from "./PropertyCard";
 import PropertyList, { featureKey } from "./PropertyList";
 
-const TEXAS_CENTER = { longitude: -99.3, latitude: 31.3, zoom: 5.5 };
+const GOOGLE_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-// Free, keyless basemaps from CARTO (vector, CORS-enabled). No access token needed.
-const MAP_TYPES = [
-  { label: "Light", style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" },
-  { label: "Streets", style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json" },
-  { label: "Dark", style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" },
-] as const;
-
+const TEXAS_CENTER = { lat: 31.3, lng: -99.3 };
+const TEXAS_ZOOM = 5.5;
+const LIST_LIMIT = 200;
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
 
-// Cap how many rows we put in the DOM for the scrollable list (perf).
-const LIST_LIMIT = 200;
+const MAP_TYPES = [
+  { label: "Roadmap", id: "roadmap" },
+  { label: "Satellite", id: "hybrid" },
+  { label: "Terrain", id: "terrain" },
+] as const;
 
-// ---- Layer styles --------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Markers + clustering layer (classic markers, colored by RevPAR bucket).
+// ---------------------------------------------------------------------------
+function MarkersLayer({
+  features,
+  visible,
+  onSelect,
+}: {
+  features: HotelFeature[];
+  visible: boolean;
+  onSelect: (f: HotelFeature) => void;
+}) {
+  const map = useMap();
+  const clustererRef = useRef<MarkerClusterer | null>(null);
 
-const clusterLayer: LayerProps = {
-  id: "clusters",
-  type: "circle",
-  source: "hotels",
-  filter: ["has", "point_count"],
-  paint: {
-    "circle-color": [
-      "step",
-      ["get", "point_count"],
-      "#cbd5e1",
-      25,
-      "#94a3b8",
-      100,
-      "#64748b",
-    ],
-    "circle-radius": ["step", ["get", "point_count"], 15, 25, 20, 100, 28],
-    "circle-opacity": 0.9,
-    "circle-stroke-width": 2,
-    "circle-stroke-color": "#ffffff",
-  },
-};
+  useEffect(() => {
+    if (!map || !window.google) return;
 
-const clusterCountLayer: LayerProps = {
-  id: "cluster-count",
-  type: "symbol",
-  source: "hotels",
-  filter: ["has", "point_count"],
-  layout: {
-    "text-field": "{point_count_abbreviated}",
-    "text-size": 12,
-  },
-  paint: { "text-color": "#0f172a" },
-};
+    if (!visible) {
+      clustererRef.current?.clearMarkers();
+      return;
+    }
 
-const unclusteredLayer: LayerProps = {
-  id: "unclustered-point",
-  type: "circle",
-  source: "hotels",
-  filter: ["!", ["has", "point_count"]],
-  paint: {
-    "circle-color": [
-      "match",
-      ["get", "bucket"],
-      "red",
-      "#ee2233",
-      "yellow",
-      "#f5b301",
-      "gray",
-      "#9aa0a6",
-      "#9aa0a6",
-    ],
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 3.5, 10, 6, 14, 9],
-    "circle-stroke-width": 1.2,
-    "circle-stroke-color": "#ffffff",
-    "circle-opacity": 0.95,
-  },
-};
+    const markers = features.map((f) => {
+      const [lng, lat] = f.geometry.coordinates;
+      const marker = new google.maps.Marker({
+        position: { lat, lng },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          fillColor: BUCKET_COLORS[f.properties.bucket],
+          fillOpacity: 0.95,
+          scale: 5,
+          strokeColor: "#ffffff",
+          strokeWeight: 1.2,
+        },
+      });
+      marker.addListener("click", () => onSelect(f));
+      return marker;
+    });
 
-const heatmapLayer: LayerProps = {
-  id: "hotels-heat",
-  type: "heatmap",
-  source: "hotels-heat",
-  paint: {
-    "heatmap-weight": [
-      "interpolate",
-      ["linear"],
-      ["get", "revpar"],
-      0,
-      0,
-      500,
-      0.4,
-      1500,
-      0.7,
-      4000,
-      1,
-    ],
-    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 5, 1, 12, 3],
-    "heatmap-color": [
-      "interpolate",
-      ["linear"],
-      ["heatmap-density"],
-      0,
-      "rgba(0,0,0,0)",
-      0.2,
-      "rgba(154,160,166,0.6)",
-      0.45,
-      "#f5b301",
-      0.75,
-      "#ff7a18",
-      1,
-      "#ee2233",
-    ],
-    "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 5, 14, 12, 34],
-    "heatmap-opacity": 0.85,
-  },
-};
+    const clusterer = new MarkerClusterer({ map, markers });
+    clustererRef.current = clusterer;
 
-// ---- Component -----------------------------------------------------------
+    return () => {
+      clusterer.clearMarkers();
+      markers.forEach((m) => m.setMap(null));
+    };
+  }, [map, features, visible, onSelect]);
 
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// RevPAR-weighted heatmap layer (visualization library).
+// ---------------------------------------------------------------------------
+function HeatLayer({
+  features,
+  visible,
+}: {
+  features: HotelFeature[];
+  visible: boolean;
+}) {
+  const map = useMap();
+  const vis = useMapsLibrary("visualization");
+  // HeatmapLayer typing through the loader is unreliable; use a loose ref.
+  const layerRef = useRef<{ setMap: (m: google.maps.Map | null) => void } | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (!map || !vis) return;
+    if (!visible) {
+      layerRef.current?.setMap(null);
+      return;
+    }
+    const data = features
+      .filter((f) => f.properties.revpar != null)
+      .map((f) => {
+        const [lng, lat] = f.geometry.coordinates;
+        return {
+          location: new google.maps.LatLng(lat, lng),
+          weight: f.properties.revpar as number,
+        };
+      });
+    const layer = new (vis as any).HeatmapLayer({
+      data,
+      radius: 24,
+      opacity: 0.8,
+      maxIntensity: 6000,
+    });
+    layer.setMap(map);
+    layerRef.current = layer;
+    return () => layer.setMap(null);
+  }, [map, vis, features, visible]);
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Imperative bits driven by the toolbar/zoom controls + viewport tracking.
+// ---------------------------------------------------------------------------
+function MapController({
+  mapTypeId,
+  onBounds,
+  registerControls,
+}: {
+  mapTypeId: string;
+  onBounds: (b: [number, number, number, number]) => void;
+  registerControls: (api: {
+    zoomIn: () => void;
+    zoomOut: () => void;
+    resetNorth: () => void;
+    recenter: () => void;
+    flyTo: (lng: number, lat: number) => void;
+  }) => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+    map.setMapTypeId(mapTypeId as google.maps.MapTypeId);
+  }, [map, mapTypeId]);
+
+  useEffect(() => {
+    if (!map) return;
+    const emit = () => {
+      const b = map.getBounds();
+      if (!b) return;
+      const ne = b.getNorthEast();
+      const sw = b.getSouthWest();
+      onBounds([sw.lng(), sw.lat(), ne.lng(), ne.lat()]);
+    };
+    const l = map.addListener("idle", emit);
+    return () => l.remove();
+  }, [map, onBounds]);
+
+  useEffect(() => {
+    if (!map) return;
+    registerControls({
+      zoomIn: () => map.setZoom((map.getZoom() ?? TEXAS_ZOOM) + 1),
+      zoomOut: () => map.setZoom((map.getZoom() ?? TEXAS_ZOOM) - 1),
+      resetNorth: () => map.setHeading(0),
+      recenter: () => {
+        map.panTo(TEXAS_CENTER);
+        map.setZoom(TEXAS_ZOOM);
+      },
+      flyTo: (lng, lat) => {
+        map.panTo({ lat, lng });
+        map.setZoom(Math.max(map.getZoom() ?? TEXAS_ZOOM, 14));
+      },
+    });
+  }, [map, registerControls]);
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 export default function MapView() {
-  const mapRef = useRef<MapRef | null>(null);
   const [data, setData] = useState<HotelCollection | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const [selected, setSelected] = useState<HotelFeature | null>(null);
@@ -148,14 +203,19 @@ export default function MapView() {
   const [activeBuckets, setActiveBuckets] = useState<Set<Bucket>>(
     new Set(ALL_BUCKETS)
   );
-  const [bearing, setBearing] = useState(0);
-  // Current map viewport [west, south, east, north]; drives the property list.
   const [bounds, setBounds] = useState<
     [number, number, number, number] | null
   >(null);
   const [query, setQuery] = useState("");
 
-  // Load the geojson the pipeline produced.
+  const controls = useRef<{
+    zoomIn: () => void;
+    zoomOut: () => void;
+    resetNorth: () => void;
+    recenter: () => void;
+    flyTo: (lng: number, lat: number) => void;
+  } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     fetch("/hotels.geojson")
@@ -163,12 +223,8 @@ export default function MapView() {
         if (!r.ok) throw new Error(`hotels.geojson ${r.status}`);
         return r.json();
       })
-      .then((json: HotelCollection) => {
-        if (!cancelled) setData(json);
-      })
-      .catch((e) => {
-        if (!cancelled) setDataError(String(e.message ?? e));
-      });
+      .then((json: HotelCollection) => !cancelled && setData(json))
+      .catch((e) => !cancelled && setDataError(String(e.message ?? e)));
     return () => {
       cancelled = true;
     };
@@ -177,39 +233,20 @@ export default function MapView() {
   const counts = useMemo(() => {
     const c: Record<Bucket, number> = { red: 0, yellow: 0, gray: 0 };
     data?.features.forEach((f) => {
-      const b = f.properties.bucket;
-      if (b in c) c[b] += 1;
+      if (f.properties.bucket in c) c[f.properties.bucket] += 1;
     });
     return c;
   }, [data]);
 
-  // Filter the collection by the active buckets (re-clusters correctly).
-  const filtered = useMemo<HotelCollection | null>(() => {
-    if (!data) return null;
-    if (activeBuckets.size === ALL_BUCKETS.length) return data;
-    return {
-      type: "FeatureCollection",
-      features: data.features.filter((f) =>
-        activeBuckets.has(f.properties.bucket)
-      ),
-    };
+  const filtered = useMemo<HotelFeature[]>(() => {
+    if (!data) return [];
+    if (activeBuckets.size === ALL_BUCKETS.length) return data.features;
+    return data.features.filter((f) => activeBuckets.has(f.properties.bucket));
   }, [data, activeBuckets]);
 
-  // Heatmap only considers hotels that actually have a RevPAR value.
-  const heatData = useMemo<HotelCollection | null>(() => {
-    if (!filtered) return null;
-    return {
-      type: "FeatureCollection",
-      features: filtered.features.filter((f) => f.properties.revpar != null),
-    };
-  }, [filtered]);
-
-  // Properties for the scrollable list: filtered by bucket, then by the current
-  // viewport (or by search text), sorted best-RevPAR first.
   const listData = useMemo(() => {
-    if (!filtered) return { rows: [] as HotelFeature[], total: 0 };
     const q = query.trim().toLowerCase();
-    let feats = filtered.features;
+    let feats = filtered;
     if (q) {
       feats = feats.filter(
         (f) =>
@@ -229,78 +266,10 @@ export default function MapView() {
     return { rows: sorted.slice(0, LIST_LIMIT), total: sorted.length };
   }, [filtered, bounds, query]);
 
-  const updateBounds = useCallback(() => {
-    const m = mapRef.current?.getMap();
-    if (!m) return;
-    try {
-      const b = m.getBounds();
-      const box = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-      if (box.every(Number.isFinite)) {
-        setBounds(box as [number, number, number, number]);
-      }
-    } catch {
-      /* transform not ready yet; ignore */
-    }
-  }, []);
-
   const flyToFeature = useCallback((f: HotelFeature) => {
     setSelected(f);
-    const map = mapRef.current;
-    if (!map) return;
-    const [lng, lat] = f.geometry.coordinates as [number, number];
-    map.flyTo({
-      center: [lng, lat],
-      zoom: Math.max(map.getZoom(), 13),
-      duration: 700,
-    });
-  }, []);
-
-  const selectedKey = selected ? featureKey(selected) : null;
-
-  // Stable identity per layerMode so react-map-gl doesn't re-apply props every render.
-  const interactiveLayerIds = useMemo(
-    () => (layerMode === "pins" ? ["clusters", "unclustered-point"] : []),
-    [layerMode]
-  );
-
-  const onClick = useCallback((event: MapLayerMouseEvent) => {
-    const feature = event.features?.[0];
-    if (!feature) {
-      setSelected(null);
-      return;
-    }
-    // Cluster: zoom in to expand.
-    if (feature.layer?.id === "clusters") {
-      const clusterId = feature.properties?.cluster_id;
-      const map = mapRef.current?.getMap();
-      const src: any = map?.getSource("hotels");
-      if (src && clusterId != null) {
-        // maplibre-gl v3 returns a Promise.
-        Promise.resolve(src.getClusterExpansionZoom(clusterId))
-          .then((zoom: number) => {
-            map?.easeTo({
-              center: (feature.geometry as GeoJSON.Point).coordinates as [
-                number,
-                number
-              ],
-              zoom,
-              duration: 500,
-            });
-          })
-          .catch(() => {});
-      }
-      return;
-    }
-    // Individual hotel: open the property card.
-    if (feature.layer?.id === "unclustered-point") {
-      const hf: HotelFeature = {
-        type: "Feature",
-        geometry: feature.geometry as GeoJSON.Point,
-        properties: feature.properties as unknown as HotelProperties,
-      };
-      setSelected(hf);
-      map_flyTo(mapRef, hf.geometry);
-    }
+    const [lng, lat] = f.geometry.coordinates;
+    controls.current?.flyTo(lng, lat);
   }, []);
 
   const toggleBucket = (b: Bucket) =>
@@ -308,58 +277,64 @@ export default function MapView() {
       const next = new Set(prev);
       if (next.has(b)) next.delete(b);
       else next.add(b);
-      if (next.size === 0) return new Set(ALL_BUCKETS); // never empty
+      if (next.size === 0) return new Set(ALL_BUCKETS);
       return next;
     });
 
+  const selectedKey = selected ? featureKey(selected) : null;
+  const registerControls = useCallback((api: typeof controls.current) => {
+    controls.current = api;
+  }, []);
+
+  if (!GOOGLE_KEY) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#eceff1] p-8">
+        <div className="max-w-md rounded-2xl bg-white p-6 text-center shadow-card">
+          <h1 className="text-lg font-semibold text-gray-900">
+            Google Maps key missing
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Set{" "}
+            <code className="rounded bg-gray-100 px-1">
+              NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+            </code>{" "}
+            in your environment (and in Vercel) to render the map.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative h-screen w-screen">
-      <Map
-        ref={mapRef}
-        initialViewState={TEXAS_CENTER}
-        mapStyle={MAP_TYPES[mapTypeIndex].style}
-        interactiveLayerIds={interactiveLayerIds}
-        onClick={onClick}
-        onLoad={updateBounds}
-        onMoveEnd={updateBounds}
-        onMove={(e) => setBearing(e.viewState.bearing)}
-        attributionControl={false}
-        style={{ width: "100%", height: "100%" }}
-      >
-        <AttributionControl position="top-left" compact />
-
-        {layerMode === "pins" && filtered && (
-          <Source
-            id="hotels"
-            type="geojson"
-            data={filtered}
-            cluster
-            clusterRadius={50}
-            clusterMaxZoom={13}
-          >
-            <Layer {...clusterLayer} />
-            <Layer {...clusterCountLayer} />
-            <Layer {...unclusteredLayer} />
-          </Source>
-        )}
-
-        {layerMode === "heatmap" && heatData && (
-          <Source id="hotels-heat" type="geojson" data={heatData}>
-            <Layer {...heatmapLayer} />
-          </Source>
-        )}
-      </Map>
+      <APIProvider apiKey={GOOGLE_KEY}>
+        <Map
+          defaultCenter={TEXAS_CENTER}
+          defaultZoom={TEXAS_ZOOM}
+          gestureHandling="greedy"
+          disableDefaultUI
+          clickableIcons={false}
+          style={{ width: "100%", height: "100%" }}
+          onClick={() => setSelected(null)}
+        >
+          <MapController
+            mapTypeId={MAP_TYPES[mapTypeIndex].id}
+            onBounds={setBounds}
+            registerControls={registerControls}
+          />
+          <MarkersLayer
+            features={filtered}
+            visible={layerMode === "pins"}
+            onSelect={flyToFeature}
+          />
+          <HeatLayer features={filtered} visible={layerMode === "heatmap"} />
+        </Map>
+      </APIProvider>
 
       <ToolRail
         layerMode={layerMode}
         mapTypeLabel={MAP_TYPES[mapTypeIndex].label}
-        onLocate={() =>
-          mapRef.current?.flyTo({
-            center: [TEXAS_CENTER.longitude, TEXAS_CENTER.latitude],
-            zoom: TEXAS_CENTER.zoom,
-            duration: 800,
-          })
-        }
+        onLocate={() => controls.current?.recenter()}
         onToggleLayers={() => {
           setSelected(null);
           setLayerMode((m) => (m === "pins" ? "heatmap" : "pins"));
@@ -369,7 +344,6 @@ export default function MapView() {
         onRadius={() => {}}
       />
 
-      {/* Right-side column on desktop; bottom sheet on mobile. */}
       <div
         className="absolute z-20 flex flex-col gap-2
           inset-x-2 bottom-2 max-h-[52vh]
@@ -394,12 +368,10 @@ export default function MapView() {
       </div>
 
       <ZoomControls
-        bearing={bearing}
-        onZoomIn={() => mapRef.current?.zoomIn()}
-        onZoomOut={() => mapRef.current?.zoomOut()}
-        onResetNorth={() =>
-          mapRef.current?.easeTo({ bearing: 0, pitch: 0, duration: 400 })
-        }
+        bearing={0}
+        onZoomIn={() => controls.current?.zoomIn()}
+        onZoomOut={() => controls.current?.zoomOut()}
+        onResetNorth={() => controls.current?.resetNorth()}
       />
 
       {selected && (
@@ -418,15 +390,4 @@ export default function MapView() {
       )}
     </div>
   );
-}
-
-function map_flyTo(
-  ref: React.MutableRefObject<MapRef | null>,
-  geom: GeoJSON.Point
-) {
-  const [lng, lat] = geom.coordinates as [number, number];
-  const map = ref.current;
-  if (!map) return;
-  const targetZoom = Math.max(map.getZoom(), 11);
-  map.flyTo({ center: [lng, lat], zoom: targetZoom, duration: 600 });
 }

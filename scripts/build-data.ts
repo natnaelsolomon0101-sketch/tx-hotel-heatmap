@@ -58,9 +58,18 @@ const CONFIG = {
     yellow: 0.3333, // middle third
   },
 
-  // "mapbox" (per-address Geocoding API, needs a token) or "census" (free US
-  // Census batch geocoder, no key). Defaults to mapbox when a token exists.
-  geocoder: (process.env.GEOCODER as "mapbox" | "census" | undefined) ?? null,
+  // "google" (rooftop, needs a key), "mapbox" (needs a token), or "census" (free
+  // US Census batch geocoder, no key). Defaults to google when a Google key is
+  // set, else mapbox when a Mapbox token is set, else census.
+  geocoder:
+    (process.env.GEOCODER as "google" | "mapbox" | "census" | undefined) ??
+    null,
+
+  googleKey:
+    process.env.GOOGLE_GEOCODING_API_KEY ||
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+    "",
+  googleConcurrency: 12,
 
   // Rooftop refinement (keyless): the Census geocoder only interpolates along
   // street centerlines, so pins land ~100m–1km off the actual building. Photon
@@ -216,6 +225,42 @@ async function geocodeMapbox(
   return null;
 }
 
+/** Google Geocoding API — rooftop accuracy. Returns the best match's location. */
+async function geocodeGoogle(
+  query: string
+): Promise<{ lng: number; lat: number } | null> {
+  const url =
+    `https://maps.googleapis.com/maps/api/geocode/json` +
+    `?address=${encodeURIComponent(query)}&region=us&key=${CONFIG.googleKey}`;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch {
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      continue;
+    }
+    if (!res.ok) {
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      continue;
+    }
+    const json: any = await res.json();
+    if (json.status === "OVER_QUERY_LIMIT") {
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      continue;
+    }
+    if (json.status === "REQUEST_DENIED") {
+      throw new Error(`Google geocoding denied: ${json.error_message ?? ""}`);
+    }
+    const r = json.results?.[0];
+    if (!r) return null;
+    const loc = r.geometry?.location;
+    if (!loc) return null;
+    return { lng: loc.lng, lat: loc.lat };
+  }
+  return null;
+}
+
 /** US Census batch geocoder — free, no key, up to 10k addresses per request. */
 async function geocodeCensusBatch(
   hotels: Hotel[]
@@ -359,7 +404,9 @@ async function main() {
     ? Number(limitArg.split("=")[1] ?? args[args.indexOf(limitArg) + 1])
     : Infinity;
   const noGeocode = args.includes("--no-geocode");
-  const forcedGeocoder = args.includes("--census")
+  const forcedGeocoder = args.includes("--google")
+    ? "google"
+    : args.includes("--census")
     ? "census"
     : args.includes("--mapbox")
     ? "mapbox"
@@ -368,7 +415,7 @@ async function main() {
   const geocoder =
     forcedGeocoder ??
     CONFIG.geocoder ??
-    (CONFIG.mapboxToken ? "mapbox" : "census");
+    (CONFIG.googleKey ? "google" : CONFIG.mapboxToken ? "mapbox" : "census");
 
   console.log(`\n▶ tx-hotel-heatmap build-data`);
   console.log(`  input:    ${CONFIG.inputCsv}`);
@@ -476,8 +523,14 @@ async function main() {
   }
 
   // 3) Geocode --------------------------------------------------------------
-  const cache: GeoCache = fs.existsSync(CONFIG.geocacheFile)
-    ? JSON.parse(fs.readFileSync(CONFIG.geocacheFile, "utf8"))
+  // Cache per-geocoder so street-level Census coords never get reused when we
+  // switch to rooftop Google (and vice-versa).
+  const cacheFile =
+    geocoder === "census"
+      ? CONFIG.geocacheFile
+      : CONFIG.geocacheFile.replace(/\.json$/, `.${geocoder}.json`);
+  const cache: GeoCache = fs.existsSync(cacheFile)
+    ? JSON.parse(fs.readFileSync(cacheFile, "utf8"))
     : {};
 
   // Apply cache + any lat/lng already present in the source.
@@ -507,6 +560,36 @@ async function main() {
           h.lat = r.lat;
         }
       });
+    } else if (geocoder === "google") {
+      if (!CONFIG.googleKey) {
+        console.error(
+          "✖ No Google key. Set GOOGLE_GEOCODING_API_KEY (or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)."
+        );
+        process.exit(1);
+      }
+      let done = 0;
+      let saved = 0;
+      await mapWithConcurrency(
+        needGeocode,
+        CONFIG.googleConcurrency,
+        async (h) => {
+          const q = `${h.name}, ${h.address}, ${h.city}, ${h.state} ${h.zip}`;
+          const r = await geocodeGoogle(q);
+          cache[geoKey(h)] = r ?? null;
+          if (r) {
+            h.lng = r.lng;
+            h.lat = r.lat;
+          }
+          if (++done % 250 === 0) {
+            console.log(`    ${done}/${needGeocode.length}`);
+            // Checkpoint so a long paid run is resumable.
+            if (done - saved >= 1000) {
+              fs.writeFileSync(cacheFile, JSON.stringify(cache));
+              saved = done;
+            }
+          }
+        }
+      );
     } else {
       if (!CONFIG.mapboxToken) {
         console.error(
@@ -531,9 +614,9 @@ async function main() {
         }
       );
     }
-    fs.mkdirSync(path.dirname(CONFIG.geocacheFile), { recursive: true });
-    fs.writeFileSync(CONFIG.geocacheFile, JSON.stringify(cache, null, 0));
-    console.log(`  cache saved -> ${CONFIG.geocacheFile}`);
+    fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+    fs.writeFileSync(cacheFile, JSON.stringify(cache));
+    console.log(`  cache saved -> ${cacheFile}`);
   }
 
   const placed = hotels.filter((h) => h.lat != null && h.lng != null);
@@ -542,7 +625,8 @@ async function main() {
   );
 
   // 3b) Rooftop refinement via Photon (keyless) ----------------------------
-  if (CONFIG.refineWithPhoton && !noGeocode) {
+  // Skipped when geocoding with Google, which is already rooftop-accurate.
+  if (CONFIG.refineWithPhoton && geocoder !== "google" && !noGeocode) {
     const pcache: Record<string, { lng: number; lat: number } | null> =
       fs.existsSync(CONFIG.photonCacheFile)
         ? JSON.parse(fs.readFileSync(CONFIG.photonCacheFile, "utf8"))

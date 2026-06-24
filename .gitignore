@@ -31,6 +31,7 @@ yarn-error.log*
 # data: keep the input CSV and geocache out of git (large / may contain owner PII).
 # The generated public/hotels.geojson IS committed so Vercel can render without a build step.
 /data/hotels.csv
-/data/geocache.json
+/data/geocache*.json
+/data/photoncache.json
 .vercel
 .gstack/

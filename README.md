@@ -3,24 +3,23 @@
 A full-screen CRE mapping tool that plots Texas hotels by **RevPAR** (revenue per
 available room), built from Texas Comptroller hotel-occupancy-tax data. Hotels are
 bucketed red / yellow / gray by RevPAR percentile and rendered as clustered colored
-pins or a true MapLibre density heatmap.
+pins or a true Google Maps density heatmap.
 
-**No map token required** — the map renders with MapLibre GL + free CARTO basemaps,
-so it works out of the box with no account or API key.
+**Requires a Google Maps API key** (Maps JavaScript API + Geocoding API).
 
-![stack](https://img.shields.io/badge/Next.js-14-black) ![stack](https://img.shields.io/badge/react--map--gl-7-blue) ![stack](https://img.shields.io/badge/MapLibre%20GL-3-green)
+![stack](https://img.shields.io/badge/Next.js-14-black) ![stack](https://img.shields.io/badge/Google%20Maps-JS%20API-green) ![stack](https://img.shields.io/badge/@vis.gl-react--google--maps-blue)
 
 ## Features
 
-- **Full-screen, keyless map** centered on Texas via MapLibre GL + free CARTO
-  basemaps (Light / Streets / Dark map types).
+- **Full-screen Google Map** centered on Texas (Roadmap / Satellite / Terrain),
+  with clustering via @googlemaps/markerclusterer.
 - **Colored markers by RevPAR bucket** — red (top third), yellow (middle third),
   gray (bottom third + missing data). Points cluster when zoomed out and expand
   on click.
 - **Property card** — click any hotel for a CRE-style card: photo, name, address,
   `{rooms} Rooms · Hospitality`, RevPAR, ADR, and occupancy.
 - **Heatmap layer** — the left-rail *Layers* button toggles between colored pins
-  and a MapLibre density heatmap weighted by RevPAR.
+  and a Google Maps (visualization) density heatmap weighted by RevPAR.
 - **Filter + legend** — the legend doubles as a filter: tap a bucket to show only
   red / yellow / gray hotels.
 - **Tool rail** — Location (recenter), Polygon, Radius, Layers, Map type. Zoom and
@@ -30,19 +29,21 @@ so it works out of the box with no account or API key.
 
 ```bash
 npm install
-npm run build-data   # generates public/hotels.geojson (already committed)
-npm run dev          # http://localhost:3000 — no token needed
+cp .env.local.example .env.local   # add your Google Maps API key(s)
+npm run build-data                 # generates public/hotels.geojson
+npm run dev                        # http://localhost:3000
 ```
 
 ## Environment variables
 
-The **map needs no token** — it renders with MapLibre GL + free CARTO basemaps.
-
-The only (optional) variable is for the data pipeline:
-
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `MAPBOX_GEOCODING_TOKEN` | `build-data` script only | *Optional.* Use the Mapbox Geocoding API instead of the free, no-key US Census geocoder (higher hit rate). Leave unset to use Census. |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | browser (build + runtime) | Renders the Google map. Needs **Maps JavaScript API**. Ships to the client — **restrict it by HTTP referrer** in Google Cloud. |
+| `GOOGLE_GEOCODING_API_KEY` | `build-data` script only | Rooftop geocoding via the **Geocoding API**. Server-side only; can be the same key or a separate IP-restricted one. Falls back to the free US Census geocoder if unset. |
+
+> **On Vercel:** add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` under Project → Settings →
+> Environment Variables (Production + Preview). Without it the app shows a
+> "Google Maps key missing" notice.
 
 ## Data pipeline
 
@@ -61,12 +62,13 @@ npm run build-data
    ADR/occupancy if present).
 2. **Computes RevPAR** — uses the `RevPAR` column when present, otherwise derives
    `revenue / (rooms × daysInPeriod)`. Rows missing key inputs are `flagged`.
-3. **Geocodes** any hotel without lat/lng and caches results to
-   `data/geocache.json`, so reruns never re-hit the API. Two geocoders:
-   - **Mapbox** (default when a token is set) — per the spec, via the Mapbox
-     Geocoding API.
-   - **US Census batch** (`GEOCODER=census`) — free, no key; handy for a first
-     pass without a token.
+3. **Geocodes** any hotel without lat/lng and caches results (per-geocoder cache
+   file) so reruns never re-hit the API. Geocoders:
+   - **Google** (default when a Google key is set) — rooftop accuracy via the
+     Geocoding API. Pins land on the actual building.
+   - **Mapbox** (`GEOCODER=mapbox`) — via the Mapbox Geocoding API (needs a token).
+   - **US Census batch** (`GEOCODER=census`) — free, no key, but street-level
+     (interpolated); pins can be ~100m–1km off.
 4. **Buckets** every hotel red / yellow / gray by RevPAR percentile across the
    portfolio (top third red, middle yellow, bottom third + no-data gray).
 5. **Writes** `public/hotels.geojson` with `name, address, rooms, revpar, adr,
@@ -86,9 +88,11 @@ const CONFIG = {
 Useful flags:
 
 ```bash
+npm run build-data                        # Google if a key is set, else Census
 GEOCODER=census npm run build-data        # force the free Census geocoder
+npm run build-data -- --google            # force Google (rooftop)
 npm run build-data -- --limit 200         # only the first 200 rows (quick test)
-npm run build-data -- --no-geocode        # use the geocache only, skip API calls
+npm run build-data -- --no-geocode        # use the cache only, skip API calls
 ```
 
 ### Notes on this dataset
@@ -104,9 +108,10 @@ npm run build-data -- --no-geocode        # use the geocache only, skip API call
 ## Deploy (Vercel)
 
 This repo is set up for Vercel auto-deploy: push to `main` and Vercel builds and
-deploys. No environment variables are required for the map to render.
+deploys. Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` in the project's environment
+variables so the deployed map renders.
 
 ## Tech
 
-Next.js 14 (App Router, TypeScript) · Tailwind CSS · react-map-gl + maplibre-gl ·
-free CARTO basemaps · `tsx` for the data pipeline.
+Next.js 14 (App Router, TypeScript) · Tailwind CSS · @vis.gl/react-google-maps +
+Google Maps JS API · @googlemaps/markerclusterer · `tsx` for the data pipeline.

@@ -15,13 +15,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* MapLibre GL styles are imported in the Map component. A few overrides to match
-   a clean CRE mapping tool. Attribution stays visible (top-left, compact) to
-   respect the OpenStreetMap / CARTO basemap license. */
-.maplibregl-popup {
-  display: none; /* property details render in our own floating card */
-}
-
-.maplibregl-ctrl-attrib.maplibregl-compact {
-  border-radius: 9999px;
+/* Google Maps renders into its own container. Hide the default InfoWindow chrome
+   in case any slips through — property details render in our own floating card. */
+.gm-style .gm-style-iw-c {
+  display: none;
 }
