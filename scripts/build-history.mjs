@@ -18,11 +18,12 @@
  *   t12Revenue:  trailing 12mo revenue (2025Q2+Q3+Q4+2026Q1), or null if any quarter missing
  *   t12Revpar:   trailing-12mo average monthly RevPAR, or null
  *
- * RevPAR basis: monthly revenue per room (= revenue / rooms), matching the map.
+ * RevPAR basis: revenue / rooms / 90 (Nate's definition), matching the map.
  * Each trend point is the average-MONTH RevPAR for that period:
- *   revpar = periodRevenue / (rooms * monthsInPeriod)
- * so the latest point lines up with the map's monthly RevPAR.
+ *   revpar = periodRevenue / (rooms * 90 * monthsInPeriod)
+ * so the latest point lines up with the map's RevPAR.
  */
+const REVPAR_DAYS = 90;
 import { parse } from "csv-parse/sync";
 import fs from "node:fs";
 
@@ -126,7 +127,7 @@ geo.features.forEach((f, i) => {
   for (const q of QUARTERS) {
     if (!m.has(q)) continue;
     const revenue = m.get(q);
-    const revpar = rooms > 0 ? revenue / (rooms * MONTHS_IN[q]) : null;
+    const revpar = rooms > 0 ? revenue / (rooms * REVPAR_DAYS * MONTHS_IN[q]) : null;
     const pt = { q, revenue: round(revenue), revpar: revpar == null ? null : Math.round(revpar * 100) / 100 };
     if (q === "2023") pt.annual = true;
     if (q === "2026Q2") pt.partial = true;
@@ -140,7 +141,7 @@ geo.features.forEach((f, i) => {
     const t12 = T12_QUARTERS.reduce((s, q) => s + m.get(q), 0);
     t12Revenue = round(t12);
     // Trailing-12mo average monthly RevPAR, same basis as the map / trend line.
-    t12Revpar = rooms > 0 ? Math.round((t12 / (rooms * 12)) * 100) / 100 : null;
+    t12Revpar = rooms > 0 ? Math.round((t12 / (rooms * REVPAR_DAYS * 12)) * 100) / 100 : null;
     fullT12++;
   }
 

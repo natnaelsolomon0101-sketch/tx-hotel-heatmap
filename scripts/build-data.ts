@@ -464,11 +464,11 @@ async function main() {
   let hotels: Hotel[] = records.map((rec) => {
     const rooms = cleanNumber(get(rec, "rooms"));
     const revenue = cleanNumber(get(rec, "revenue"));
-    // RevPAR = monthly revenue per room. We compute it from revenue + rooms
-    // rather than trusting the source "RevPAR" column: that column divides by
-    // ~90 days even though the revenue is monthly, so it reads ~3x low.
+    // RevPAR = revenue / rooms / 90 (Nate's definition). Computed from
+    // revenue + rooms on one consistent /90 basis (the source RevPAR column
+    // mixed bases, so we don't trust it).
     let revpar =
-      revenue != null && rooms && rooms > 0 ? revenue / rooms : null;
+      revenue != null && rooms && rooms > 0 ? revenue / (rooms * 90) : null;
     // Reject untrusted RevPAR: 1-room placeholders and implausible highs.
     if (
       (rooms != null && rooms < CONFIG.minRooms) ||

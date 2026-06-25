@@ -1,19 +1,19 @@
 /**
  * recompute-revpar.mjs — fix RevPAR in public/hotels.geojson IN PLACE.
  *
- * RevPAR = monthly revenue per room = revenue / rooms (the data period is one
- * month, May 2026). The source Comptroller "RevPAR" column divides by ~90 days
- * even on monthly revenue, so it read ~3x low and mixed bases with the /31
- * fallback. We recompute from revenue + rooms directly, then re-bucket by the
- * same tertile rule. No geocoding — coordinates/photos are untouched.
+ * RevPAR = revenue / rooms / 90 (Nate's definition). The pipeline previously
+ * mixed the source RevPAR column (/90) with a /31 fallback; this recomputes
+ * every row on one clean /90 basis, then re-buckets by the same tertile rule.
+ * No geocoding — coordinates/photos are untouched.
  *
  *   node scripts/recompute-revpar.mjs
  */
 import fs from "node:fs";
 
 const GEOJSON = "public/hotels.geojson";
+const DAYS = 90; // RevPAR basis: revenue / rooms / 90 (Nate's definition)
 const MIN_ROOMS = 2; // 1-room filings are placeholders, not real counts
-const MAX_REVPAR = 20000; // monthly $/room ceiling (~$650/night) — rejects data errors
+const MAX_REVPAR = 20000; // $/room ceiling on the /90 basis — rejects data errors
 const RED_P = 0.6667; // top third
 const YELLOW_P = 0.3333; // middle third
 
@@ -35,7 +35,7 @@ for (const f of geo.features) {
   const revenue = p.revenue;
   let revpar = null;
   if (rooms >= MIN_ROOMS && revenue != null && revenue > 0) {
-    revpar = revenue / rooms;
+    revpar = revenue / (rooms * DAYS);
     if (revpar > MAX_REVPAR) {
       revpar = null; // implausible (vacation-rental aggregators, bad room counts)
       nulled++;
@@ -68,10 +68,10 @@ fs.writeFileSync(GEOJSON, JSON.stringify(geo));
 
 const median = vals[Math.floor(vals.length / 2)];
 const avg = Math.round(vals.reduce((s, v) => s + v, 0) / vals.length);
-console.log("=== RevPAR recomputed (monthly $/room) ===");
+console.log("=== RevPAR recomputed (revenue / rooms / 90) ===");
 console.log(`hotels with RevPAR:  ${vals.length.toLocaleString()}`);
 console.log(`nulled by $${MAX_REVPAR} cap: ${nulled.toLocaleString()}`);
-console.log(`median RevPAR:       $${median.toLocaleString()}/mo`);
-console.log(`avg RevPAR:          $${avg.toLocaleString()}/mo`);
+console.log(`median RevPAR:       $${median.toLocaleString()}`);
+console.log(`avg RevPAR:          $${avg.toLocaleString()}`);
 console.log(`bucket cutoffs:      yellow >= $${Math.round(yellowCut)}, red >= $${Math.round(redCut)}`);
 console.log(`buckets:             red ${tally.red}  yellow ${tally.yellow}  gray ${tally.gray}`);
