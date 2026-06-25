@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 type ShortcutsHelpProps = {
   open: boolean;
@@ -18,22 +18,53 @@ const SHORTCUTS: { keys: string[]; label: string }[] = [
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex min-w-[1.75rem] items-center justify-center rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-gray-700 shadow-sm">
+    <kbd className="inline-flex min-w-[1.75rem] items-center justify-center rounded-md border border-border bg-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-foreground shadow-sm">
       {children}
     </kbd>
   );
 }
 
 export default function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
-  // Close on Escape regardless of focus while the overlay is open.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Close on Escape and trap focus within the panel while the overlay is open.
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "Tab") {
+        const panel = panelRef.current;
+        if (!panel) return;
+        const focusable = panel.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  // Move focus into the dialog on open; restore it on close.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.activeElement as HTMLElement | null;
+    closeBtnRef.current?.focus();
+    return () => prev?.focus?.();
+  }, [open]);
 
   if (!open) return null;
 
@@ -49,20 +80,24 @@ export default function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
         type="button"
         aria-label="Close keyboard shortcuts"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-gray-900/40 backdrop-blur-sm"
+        className="absolute inset-0 cursor-default bg-[hsl(var(--ink)/0.4)] backdrop-blur-sm"
       />
 
       {/* Panel */}
-      <div className="relative w-full max-w-sm rounded-2xl bg-white/95 p-4 shadow-card ring-1 ring-black/5 backdrop-blur">
+      <div
+        ref={panelRef}
+        className="relative w-full max-w-sm rounded-2xl bg-surface/95 p-4 shadow-md ring-1 ring-border backdrop-blur"
+      >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="label-overline">
             Keyboard shortcuts
           </h2>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-gray-400 transition hover:text-gray-700"
+            className="text-subtle transition-base hover:text-foreground"
           >
             <svg
               viewBox="0 0 24 24"
@@ -84,7 +119,7 @@ export default function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
               key={label}
               className="flex items-center justify-between rounded-lg px-2 py-1.5"
             >
-              <span className="text-sm text-gray-800">{label}</span>
+              <span className="text-sm text-foreground">{label}</span>
               <span className="flex shrink-0 items-center gap-1">
                 {keys.map((k) => (
                   <Kbd key={k}>{k}</Kbd>
@@ -94,7 +129,7 @@ export default function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
           ))}
         </ul>
 
-        <p className="mt-3 border-t border-gray-100 pt-2 text-[11px] leading-snug text-gray-400">
+        <p className="mt-3 border-t border-border pt-2 text-[11px] leading-snug text-subtle">
           Shortcuts are ignored while typing in the search box. Press{" "}
           <Kbd>?</Kbd> anytime to reopen this.
         </p>

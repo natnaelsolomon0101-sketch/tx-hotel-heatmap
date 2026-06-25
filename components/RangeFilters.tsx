@@ -83,6 +83,7 @@ function DualRange({
           disabled={disabled}
           onChange={(e) => setLo(Number(e.target.value))}
           aria-label={`${label} minimum`}
+          aria-valuetext={format(lo)}
           className="range-thumb absolute left-0 top-0 h-4 w-full appearance-none bg-transparent"
           style={{ zIndex: lo > max - (max - min) / 2 ? 5 : 4 }}
         />
@@ -95,6 +96,7 @@ function DualRange({
           disabled={disabled}
           onChange={(e) => setHi(Number(e.target.value))}
           aria-label={`${label} maximum`}
+          aria-valuetext={format(hi)}
           className="range-thumb absolute left-0 top-0 h-4 w-full appearance-none bg-transparent"
           style={{ zIndex: 5 }}
         />

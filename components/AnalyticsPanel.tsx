@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   Bucket,
   BUCKET_COLORS,
@@ -45,7 +46,7 @@ function RevparHistogram({
   values: number[];
   median: number | null;
 }) {
-  const bins = histogram(values);
+  const bins = useMemo(() => histogram(values), [values]);
   const maxCount = Math.max(1, ...bins.map((b) => b.count));
 
   const W = 300;
@@ -261,7 +262,7 @@ function ScatterPlot({
   inScope: HotelFeature[];
   onSelectHotel?: (feature: HotelFeature) => void;
 }) {
-  const points = computeScatterPlotData(inScope);
+  const points = useMemo(() => computeScatterPlotData(inScope), [inScope]);
   if (points.length === 0) {
     return (
       <p className="text-[11px] leading-snug text-subtle">
@@ -521,8 +522,10 @@ function CityLeaderboard({
 // 7. Revenue concentration — what % from top 10% of hotels.
 // ---------------------------------------------------------------------------
 function RevenueConcentration({ inScope }: { inScope: HotelFeature[] }) {
-  const { topPct, totalRevenue, concentrated } =
-    computeRevenueConcentration(inScope);
+  const { topPct, totalRevenue, concentrated } = useMemo(
+    () => computeRevenueConcentration(inScope),
+    [inScope]
+  );
 
   if (totalRevenue === null || concentrated === null) {
     return (
@@ -566,11 +569,15 @@ export default function AnalyticsPanel({
   onSelectMarket,
   onSelectHotel,
 }: AnalyticsPanelProps) {
-  const revpars = inScope
-    .map((f) => f.properties.revpar)
-    .filter((v): v is number => v != null);
+  const revpars = useMemo(
+    () =>
+      inScope
+        .map((f) => f.properties.revpar)
+        .filter((v): v is number => v != null),
+    [inScope]
+  );
 
-  const outliers = computeOutliers(inScope);
+  const outliers = useMemo(() => computeOutliers(inScope), [inScope]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface shadow-card ring-1 ring-border backdrop-blur">

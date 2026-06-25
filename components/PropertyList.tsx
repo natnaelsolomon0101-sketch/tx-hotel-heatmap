@@ -1,6 +1,6 @@
 "use client";
 
-import { RefObject } from "react";
+import { RefObject, memo } from "react";
 import { BUCKET_COLORS, HotelFeature } from "@/lib/types";
 import { roundPct } from "@/lib/percentile";
 import EmptyState from "@/components/EmptyState";
@@ -65,6 +65,126 @@ export function featureKey(f: HotelFeature) {
   return `${f.properties.name}|${lng.toFixed(4)},${lat.toFixed(4)}`;
 }
 
+function DownloadGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+    </svg>
+  );
+}
+
+type RowProps = {
+  feature: HotelFeature;
+  active: boolean;
+  pct: number | null;
+  saved: boolean;
+  compared: boolean;
+  compareDisabled: boolean;
+  compareMax: number;
+  onSelect: (f: HotelFeature) => void;
+  onToggleCompare?: (f: HotelFeature) => void;
+  onToggleSaved?: (key: string) => void;
+};
+
+const PropertyRow = memo(function PropertyRow({
+  feature,
+  active,
+  pct,
+  saved,
+  compared,
+  compareDisabled,
+  compareMax,
+  onSelect,
+  onToggleCompare,
+  onToggleSaved,
+}: RowProps) {
+  const p = feature.properties;
+  const k = featureKey(feature);
+  return (
+    <div
+      className={`flex w-full items-center gap-2.5 px-3 py-2 transition-base ${
+        active
+          ? "bg-[hsl(var(--accent)/0.08)] ring-1 ring-inset ring-[hsl(var(--accent)/0.25)]"
+          : "hover:bg-muted"
+      }`}
+    >
+      <button
+        onClick={() => onSelect(feature)}
+        aria-current={active ? "true" : undefined}
+        className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+      >
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-surface"
+          style={{ backgroundColor: BUCKET_COLORS[p.bucket] }}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-foreground">
+            {titleCase(p.name)}
+          </span>
+          <span className="block truncate text-meta text-muted-foreground">
+            {titleCase(p.city)}, {p.state}
+            {p.rooms != null ? ` · ${p.rooms} rms` : ""}
+          </span>
+        </span>
+        {pct != null && (
+          <span
+            className={`shrink-0 rounded-md px-1.5 py-0.5 text-meta font-mono font-semibold ${PCT_CHIP[p.bucket]}`}
+            title={`Statewide RevPAR percentile: P${pct}`}
+          >
+            P{pct}
+          </span>
+        )}
+        <span className="shrink-0 text-right">
+          <span className="block text-data-sm text-foreground">
+            {money(p.revpar)}
+          </span>
+          <span className="block label-overline text-[9px]">
+            RevPAR
+          </span>
+        </span>
+      </button>
+      {onToggleCompare && (
+        <button
+          type="button"
+          onClick={() => onToggleCompare(feature)}
+          aria-pressed={compared}
+          disabled={compareDisabled}
+          title={
+            compared
+              ? "Remove from compare"
+              : compareDisabled
+              ? `Max ${compareMax} in compare`
+              : "Add to compare"
+          }
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-base leading-none transition-base ${
+            compared
+              ? "bg-ink text-surface"
+              : "text-subtle hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
+          }`}
+        >
+          {compared ? "★" : "✩"}
+        </button>
+      )}
+      {onToggleSaved && (
+        <button
+          type="button"
+          onClick={() => onToggleSaved(k)}
+          aria-label={saved ? "Remove from watchlist" : "Save to watchlist"}
+          aria-pressed={saved}
+          title={saved ? "Saved — click to remove" : "Save to watchlist"}
+          className={`shrink-0 rounded-md p-1 transition-base ${
+            saved
+              ? "text-foreground hover:bg-muted"
+              : "text-subtle hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          <BookmarkIcon className="h-4 w-4" filled={saved} />
+        </button>
+      )}
+    </div>
+  );
+});
+
 export default function PropertyList({
   rows,
   total,
@@ -93,7 +213,11 @@ export default function PropertyList({
       <div className="border-b border-border p-3">
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="label-overline">Properties</h2>
-          <span className="text-meta font-mono tabular-nums text-subtle">
+          <span
+            aria-live="polite"
+            aria-atomic="true"
+            className="text-meta font-mono tabular-nums text-subtle"
+          >
             {query
               ? `${total.toLocaleString()} match`
               : `${total.toLocaleString()} in view`}
@@ -137,9 +261,7 @@ export default function PropertyList({
             title="Export current list to CSV"
             className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 text-sm font-medium text-muted-foreground ring-1 ring-border transition-base hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40"
           >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-            </svg>
+            <DownloadGlyph />
             CSV
           </button>
           {onExportXls && (
@@ -178,7 +300,6 @@ export default function PropertyList({
         ) : (
           <ul className="divide-y divide-border">
             {rows.map((f, i) => {
-              const p = f.properties;
               const k = featureKey(f);
               const active = k === selectedKey;
               const pctRaw = getPercentile?.(f);
@@ -188,86 +309,18 @@ export default function PropertyList({
               const compareDisabled = !compared && compareCount >= compareMax;
               return (
                 <li key={k + i}>
-                  <div
-                    className={`flex w-full items-center gap-2.5 px-3 py-2 transition-base ${
-                      active
-                        ? "bg-[hsl(var(--accent)/0.08)] ring-1 ring-inset ring-[hsl(var(--accent)/0.25)]"
-                        : "hover:bg-muted"
-                    }`}
-                  >
-                    <button
-                      onClick={() => onSelect(f)}
-                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-                    >
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-surface"
-                        style={{ backgroundColor: BUCKET_COLORS[p.bucket] }}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-foreground">
-                          {titleCase(p.name)}
-                        </span>
-                        <span className="block truncate text-meta text-muted-foreground">
-                          {titleCase(p.city)}, {p.state}
-                          {p.rooms != null ? ` · ${p.rooms} rms` : ""}
-                        </span>
-                      </span>
-                      {pct != null && (
-                        <span
-                          className={`shrink-0 rounded-md px-1.5 py-0.5 text-meta font-mono font-semibold ${PCT_CHIP[p.bucket]}`}
-                          title={`Statewide RevPAR percentile: P${pct}`}
-                        >
-                          P{pct}
-                        </span>
-                      )}
-                      <span className="shrink-0 text-right">
-                        <span className="block text-data-sm text-foreground">
-                          {money(p.revpar)}
-                        </span>
-                        <span className="block label-overline text-[9px]">
-                          RevPAR
-                        </span>
-                      </span>
-                    </button>
-                    {onToggleCompare && (
-                      <button
-                        type="button"
-                        onClick={() => onToggleCompare(f)}
-                        aria-pressed={compared}
-                        disabled={compareDisabled}
-                        title={
-                          compared
-                            ? "Remove from compare"
-                            : compareDisabled
-                            ? `Max ${compareMax} in compare`
-                            : "Add to compare"
-                        }
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-base leading-none transition-base ${
-                          compared
-                            ? "bg-ink text-surface"
-                            : "text-subtle hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
-                        }`}
-                      >
-                        {compared ? "★" : "✩"}
-                      </button>
-                    )}
-                    {onToggleSaved && (
-                      <button
-                        type="button"
-                        onClick={() => onToggleSaved(k)}
-                        aria-label={saved ? "Remove from watchlist" : "Save to watchlist"}
-                        aria-pressed={saved}
-                        title={saved ? "Saved — click to remove" : "Save to watchlist"}
-                        className={`shrink-0 rounded-md p-1 transition-base ${
-                          saved
-                            ? "text-foreground hover:bg-muted"
-                            : "text-subtle hover:bg-muted hover:text-foreground"
-                        }`}
-                      >
-                        <BookmarkIcon className="h-4 w-4" filled={saved} />
-                      </button>
-                    )}
-                  </div>
+                  <PropertyRow
+                    feature={f}
+                    active={active}
+                    pct={pct}
+                    saved={saved}
+                    compared={compared}
+                    compareDisabled={compareDisabled}
+                    compareMax={compareMax}
+                    onSelect={onSelect}
+                    onToggleCompare={onToggleCompare}
+                    onToggleSaved={onToggleSaved}
+                  />
                 </li>
               );
             })}

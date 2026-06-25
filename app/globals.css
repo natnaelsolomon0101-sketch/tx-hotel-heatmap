@@ -127,6 +127,43 @@ body {
   .shimmer {
     animation: none;
   }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Skip-to-content link: invisible until keyboard-focused, then pinned top-left
+   so keyboard users can jump straight to the map without tabbing through chrome.
+   Uses transform (not display:none) so it stays focusable. */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 50;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius);
+  background: hsl(var(--ink));
+  color: hsl(var(--surface));
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform 150ms ease-out;
+}
+.skip-link:focus {
+  transform: none;
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--surface)), 0 0 0 4px hsl(var(--ring));
+}
+@media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
 }
 
 /* Global focus-visible ring: components may also opt into

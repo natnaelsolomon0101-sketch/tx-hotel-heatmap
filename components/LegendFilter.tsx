@@ -85,6 +85,8 @@ export default function LegendFilter({
               key={bucket}
               type="button"
               onClick={() => onToggle(bucket)}
+              aria-pressed={on}
+              aria-label={`${title}: ${counts[bucket].toLocaleString()} hotels, ${on ? "shown" : "hidden"}, click to ${on ? "hide" : "show"}`}
               className={`flex flex-1 items-center gap-1.5 rounded-full px-2 py-1.5 text-left transition-base ${soft} ${
                 on ? "ring-1 opacity-100" : "ring-0 opacity-50"
               }`}
@@ -111,6 +113,8 @@ export default function LegendFilter({
               key={bucket}
               type="button"
               onClick={() => onToggle(bucket)}
+              aria-pressed={on}
+              aria-label={`${title}: ${counts[bucket].toLocaleString()} hotels, ${on ? "shown" : "hidden"}, click to ${on ? "hide" : "show"}`}
               className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-base ${
                 on ? "hover:bg-muted" : "opacity-40 hover:opacity-70"
               }`}

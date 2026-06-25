@@ -182,7 +182,7 @@ export default function ShareButton({
         aria-label="Share this view"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 md:px-3"
+        className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-muted-foreground transition-base hover:bg-muted md:px-3"
       >
         {copied === "link" ? <CheckIcon /> : <ShareIcon />}
         <span className="hidden sm:inline">
@@ -194,13 +194,13 @@ export default function ShareButton({
         <div
           role="dialog"
           aria-label="Share this view"
-          className="absolute right-0 top-11 z-50 w-72 rounded-2xl bg-white p-3 shadow-card ring-1 ring-black/5"
+          className="absolute right-0 top-11 z-50 w-72 rounded-2xl bg-surface p-3 shadow-md ring-1 ring-border"
         >
-          <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+          <div className="label-overline">
             Share this view
           </div>
 
-          <p className="mt-1.5 rounded-lg bg-gray-50 px-2.5 py-1.5 text-[11px] leading-snug text-gray-600 ring-1 ring-black/5">
+          <p className="mt-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground ring-1 ring-border">
             {summary}
           </p>
 
@@ -208,7 +208,7 @@ export default function ShareButton({
             <button
               type="button"
               onClick={copyLink}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-700"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-xs font-medium text-white transition-base hover:bg-ink-hover"
             >
               {copied === "link" ? <CheckIcon /> : <CopyIcon />}
               {copied === "link" ? "Copied" : "Copy link"}
@@ -216,7 +216,7 @@ export default function ShareButton({
             <button
               type="button"
               onClick={copySummary}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-black/5 transition-colors hover:bg-gray-200"
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-muted px-3 py-2 text-xs font-medium text-muted-foreground ring-1 ring-border transition-base hover:text-foreground hover:ring-border-strong"
             >
               {copied === "summary" ? <CheckIcon /> : <CopyIcon />}
               {copied === "summary" ? "Copied" : "Copy summary"}
@@ -231,7 +231,7 @@ export default function ShareButton({
               readOnly
               value={shareUrl}
               onFocus={(e) => e.currentTarget.select()}
-              className="w-full select-all rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-mono text-[11px] text-gray-600 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="w-full select-all rounded-lg border border-border bg-surface px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             />
           </label>
         </div>

@@ -9,7 +9,7 @@ const MapView = dynamic(() => import("@/components/MapView"), {
 
 export default function Home() {
   return (
-    <main className="h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
+    <main id="main-content" tabIndex={-1} className="h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
       <MapView />
     </main>
   );

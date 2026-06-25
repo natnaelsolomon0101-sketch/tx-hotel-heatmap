@@ -111,6 +111,13 @@ function triggerCsvDownload(csv: string, filename: string): void {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  // Defer cleanup: Firefox/Safari cancel the in-flight download if the object
+  // URL is revoked synchronously before the navigation has been dispatched.
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 0);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Bucket, BUCKET_LABELS, HotelHistory, HotelProperties } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { HotelPercentiles } from "@/lib/percentile";
@@ -126,7 +126,7 @@ function DirectionsIcon() {
   );
 }
 
-export default function PropertyCard({
+function PropertyCard({
   hotel,
   history: hist,
   onClose,
@@ -518,3 +518,5 @@ export default function PropertyCard({
     </div>
   );
 }
+
+export default memo(PropertyCard);

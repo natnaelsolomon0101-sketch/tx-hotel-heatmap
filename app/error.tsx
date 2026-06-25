@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 
-// App-level error boundary. Keeps a transient client-side exception (e.g. a
-// WebGL/maplibre hiccup) from white-screening the whole page; the user can retry.
+// App-level error boundary. Catches a transient client-side rendering error
+// (e.g. a WebGL/map hiccup) so it doesn't white-screen the whole page; the user can retry.
 export default function Error({
   error,
   reset,
@@ -17,17 +17,20 @@ export default function Error({
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-background p-8">
-      <div className="max-w-md rounded-panel bg-surface p-6 text-center shadow-lg ring-1 ring-border">
+      <div
+        role="alert"
+        className="max-w-md rounded-panel bg-surface p-6 text-center shadow-lg ring-1 ring-border"
+      >
         <h1 className="text-display">
           Something went wrong rendering the map
         </h1>
         <p className="mt-2 text-meta text-muted-foreground">
-          A client-side error occurred. This is usually transient.
+          The map hit a temporary rendering error. Reloading usually fixes it.
         </p>
         <button
           type="button"
           onClick={reset}
-          className="transition-base mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink-hover"
+          className="transition-base mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink-hover"
         >
           Reload the map
         </button>
