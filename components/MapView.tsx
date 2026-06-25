@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   APIProvider,
   Map,
@@ -25,25 +26,51 @@ import PropertyList, { featureKey, SortKey } from "./PropertyList";
 import HeaderBar from "./HeaderBar";
 import { computeStats } from "@/lib/stats";
 import { buildRevparIndex, getHotelPercentiles } from "@/lib/percentile";
-import MarketPanel from "./MarketPanel";
+const MarketPanel = dynamic(() => import("./MarketPanel"), {
+  ssr: false,
+  loading: () => (
+    <div className="min-h-0 flex-1 rounded-2xl bg-surface ring-1 ring-border" />
+  ),
+});
 import { aggregateMarkets } from "@/lib/markets";
 import RangeFilters, { Range } from "./RangeFilters";
 import { decodeState, useUrlState, UrlState } from "@/lib/urlState";
 import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import ShortcutsHelp from "./ShortcutsHelp";
+const ShortcutsHelp = dynamic(() => import("./ShortcutsHelp"), {
+  ssr: false,
+  loading: () => null,
+});
 import BriefButton from "./BriefButton";
-import PrintBrief from "./PrintBrief";
+const PrintBrief = dynamic(() => import("./PrintBrief"), {
+  ssr: false,
+  loading: () => null,
+});
 import Coachmark from "./Coachmark";
 import CompareTray from "./CompareTray";
 import PolygonTool, { Vertex } from "./PolygonTool";
 import RadiusTool from "./RadiusTool";
 import AreaSummary from "./AreaSummary";
-import AnalyticsPanel from "./AnalyticsPanel";
-import WatchlistView from "./WatchlistView";
+const AnalyticsPanel = dynamic(() => import("./AnalyticsPanel"), {
+  ssr: false,
+  loading: () => (
+    <div className="min-h-0 flex-1 rounded-2xl bg-surface ring-1 ring-border" />
+  ),
+});
+const WatchlistView = dynamic(() => import("./WatchlistView"), {
+  ssr: false,
+  loading: () => (
+    <div className="min-h-0 flex-1 rounded-2xl bg-surface ring-1 ring-border" />
+  ),
+});
 import ShareButton from "./ShareButton";
 import { useWatchlist } from "@/lib/useWatchlist";
-import RollupPanel from "./RollupPanel";
+const RollupPanel = dynamic(() => import("./RollupPanel"), {
+  ssr: false,
+  loading: () => (
+    <div className="min-h-0 flex-1 rounded-2xl bg-surface ring-1 ring-border" />
+  ),
+});
 import { aggregateRollup, RollupDim } from "@/lib/rollups";
 import BrandFilter from "./BrandFilter";
 import FilterPresets from "./FilterPresets";

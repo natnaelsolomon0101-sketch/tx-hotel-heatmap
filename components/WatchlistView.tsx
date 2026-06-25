@@ -63,13 +63,13 @@ function WatchlistView({
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white/95 shadow-card ring-1 ring-black/5 backdrop-blur">
-      <div className="border-b border-gray-100 p-3">
+    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface/95 shadow-md ring-1 ring-border backdrop-blur">
+      <div className="border-b border-border p-3">
         <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">
             Saved
           </h2>
-          <span className="text-[11px] tabular-nums text-gray-400">
+          <span className="text-[11px] tabular-nums text-subtle">
             {saved.length.toLocaleString()} saved
           </span>
         </div>
@@ -79,7 +79,7 @@ function WatchlistView({
             onClick={exportWatchlist}
             disabled={saved.length === 0}
             title="Export watchlist to CSV"
-            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
           >
             <ExportGlyph />
             Export watchlist CSV
@@ -89,7 +89,7 @@ function WatchlistView({
             onClick={onClear}
             disabled={saved.length === 0}
             title="Remove all saved properties"
-            className="shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            className="shrink-0 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
           >
             Clear all
           </button>
@@ -103,7 +103,7 @@ function WatchlistView({
             message="Tap the bookmark on any property to save it here for later — your list persists across sessions."
           />
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border">
             {saved.map((f, i) => {
               const p = f.properties;
               const k = featureKey(f);
@@ -111,8 +111,8 @@ function WatchlistView({
               return (
                 <li key={k + i}>
                   <div
-                    className={`flex w-full items-center gap-2.5 px-3 py-2 transition ${
-                      active ? "bg-gray-100" : "hover:bg-gray-50"
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 transition-base ${
+                      active ? "bg-muted" : "hover:bg-muted"
                     }`}
                   >
                     <button
@@ -120,23 +120,23 @@ function WatchlistView({
                       className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                     >
                       <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-surface"
                         style={{ backgroundColor: BUCKET_COLORS[p.bucket] }}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-gray-800">
+                        <span className="block truncate text-sm font-medium text-foreground">
                           {titleCase(p.name)}
                         </span>
-                        <span className="block truncate text-[11px] text-gray-500">
+                        <span className="block truncate text-[11px] text-muted-foreground">
                           {titleCase(p.city)}, {p.state}
                           {p.rooms != null ? ` · ${p.rooms} rms` : ""}
                         </span>
                       </span>
                       <span className="shrink-0 text-right">
-                        <span className="block text-sm font-semibold tabular-nums text-gray-900">
+                        <span className="block text-sm font-semibold tabular-nums text-foreground">
                           {money(p.revpar)}
                         </span>
-                        <span className="block text-[10px] uppercase tracking-wide text-gray-400">
+                        <span className="block text-[10px] uppercase tracking-wide text-subtle">
                           RevPAR
                         </span>
                       </span>
@@ -146,7 +146,7 @@ function WatchlistView({
                       onClick={() => onRemove(k)}
                       aria-label="Remove from watchlist"
                       title="Remove from watchlist"
-                      className="shrink-0 rounded-md p-1 text-gray-900 hover:bg-gray-100"
+                      className="shrink-0 rounded-md p-1 text-foreground hover:bg-muted"
                     >
                       <BookmarkIcon className="h-4 w-4" filled />
                     </button>

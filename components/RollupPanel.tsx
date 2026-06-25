@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { BUCKET_COLORS } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { RollupRow } from "@/lib/markets";
@@ -19,7 +19,10 @@ type RollupPanelProps = {
 // Tiny stacked red/yellow/gray share bar — identical to MarketPanel's ShareBar.
 function ShareBar({ shares }: { shares: RollupRow["shares"] }) {
   return (
-    <span className="flex h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+    <span
+      aria-hidden="true"
+      className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted"
+    >
       {(["red", "yellow", "gray"] as const).map((b) =>
         shares[b] > 0 ? (
           <span
@@ -53,7 +56,7 @@ function Segmented<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className="flex gap-0.5 rounded-lg bg-gray-100 p-0.5"
+      className="flex gap-0.5 rounded-lg bg-muted p-0.5"
     >
       {options.map(([id, label]) => (
         <button
@@ -61,10 +64,10 @@ function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(id)}
           aria-pressed={value === id}
-          className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition ${
+          className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-base ${
             value === id
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-800"
+              ? "bg-surface text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           {label}
@@ -74,7 +77,7 @@ function Segmented<T extends string>({
   );
 }
 
-export default function RollupPanel({
+function RollupPanel({
   rows,
   dim,
   onDimChange,
@@ -86,17 +89,17 @@ export default function RollupPanel({
   const dimLabel = dim === "zip" ? "ZIP codes" : "Cities";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white/95 shadow-card ring-1 ring-black/5 backdrop-blur">
-      <div className="border-b border-gray-100 p-3">
+    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface/95 shadow-md ring-1 ring-border backdrop-blur">
+      <div className="border-b border-border p-3">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">
             Rollups
           </h2>
-          <span className="text-[11px] tabular-nums text-gray-400">
+          <span className="text-[11px] tabular-nums text-subtle">
             {sorted.length.toLocaleString()} ranked
           </span>
         </div>
-        <p className="mt-1 text-[11px] leading-snug text-gray-400">
+        <p className="mt-1 text-[11px] leading-snug text-subtle">
           {dimLabel} aggregated from the current filter. Tap a row to filter the
           list and fly there.
         </p>
@@ -124,39 +127,40 @@ export default function RollupPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {sorted.length === 0 ? (
-          <p className="p-4 text-sm text-gray-400">
+          <p className="p-4 text-sm text-subtle">
             No {dim === "zip" ? "ZIP codes" : "cities"} meet the minimum size for
             the current filter.
           </p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border">
             {sorted.map((r, i) => (
               <li key={r.key}>
                 <button
                   type="button"
                   onClick={() => onSelect(dim, r.key)}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-gray-50"
+                  aria-label={`Rank ${i + 1}: ${r.key}, ${r.count.toLocaleString()} hotels, average RevPAR ${fmtMoney(r.avgRevpar)}, median ${fmtMoney(r.medianRevpar)}. Filter to this ${dim === "zip" ? "ZIP code" : "city"}.`}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-base hover:bg-muted"
                 >
-                  <span className="w-5 shrink-0 text-right text-[11px] font-semibold tabular-nums text-gray-400">
+                  <span className="w-5 shrink-0 text-right text-[11px] font-semibold tabular-nums text-subtle">
                     {i + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-gray-800">
+                    <span className="block truncate text-sm font-medium text-foreground">
                       {r.key}
                     </span>
                     <span className="mt-1 block">
                       <ShareBar shares={r.shares} />
                     </span>
-                    <span className="mt-1 block text-[11px] tabular-nums text-gray-500">
+                    <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground">
                       {r.count.toLocaleString()} hotels · med{" "}
                       {fmtMoney(r.medianRevpar)}
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className="block text-sm font-semibold tabular-nums text-gray-900">
+                    <span className="block text-sm font-semibold tabular-nums text-foreground">
                       {fmtMoney(r.avgRevpar)}
                     </span>
-                    <span className="block text-[10px] uppercase tracking-wide text-gray-400">
+                    <span className="block text-[10px] uppercase tracking-wide text-subtle">
                       Avg RevPAR
                     </span>
                   </span>
@@ -169,3 +173,5 @@ export default function RollupPanel({
     </div>
   );
 }
+
+export default memo(RollupPanel);

@@ -25,11 +25,12 @@ export default function Error({
           Something went wrong rendering the map
         </h1>
         <p className="mt-2 text-meta text-muted-foreground">
-          The map hit a temporary rendering error. Reloading usually fixes it.
+          This is usually temporary. Reload to try again.
         </p>
         <button
           type="button"
           onClick={reset}
+          aria-label="Reload the map"
           className="transition-base mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink-hover"
         >
           Reload the map

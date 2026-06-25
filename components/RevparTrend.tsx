@@ -1,5 +1,7 @@
 "use client";
 
+import { memo, useMemo } from "react";
+
 import { TrendPoint } from "@/lib/types";
 
 type RevparTrendProps = {
@@ -35,17 +37,60 @@ function qLabel(q: string): string {
   return m ? `’${m[1].slice(2)} Q${m[2]}` : q;
 }
 
-export default function RevparTrend({
+function RevparTrend({
   history,
   t12Revenue,
   t12Revpar,
 }: RevparTrendProps) {
-  const pts = (history ?? []).filter(
-    (p): p is TrendPoint & { revpar: number } =>
-      p.revpar != null && Number.isFinite(p.revpar),
-  );
+  const chart = useMemo(() => {
+    const pts = (history ?? []).filter(
+      (p): p is TrendPoint & { revpar: number } =>
+        p.revpar != null && Number.isFinite(p.revpar),
+    );
 
-  if (pts.length < 2) {
+    if (pts.length < 2) {
+      return { ready: false as const, pts };
+    }
+
+    const vals = pts.map((p) => p.revpar);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = max - min || 1;
+
+    const x = (i: number) =>
+      PAD_X + (i * (W - 2 * PAD_X)) / Math.max(pts.length - 1, 1);
+    const y = (v: number) =>
+      PAD_TOP + (1 - (v - min) / span) * (H - PAD_TOP - PAD_BOTTOM);
+
+    const linePath = pts
+      .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(p.revpar).toFixed(1)}`)
+      .join(" ");
+    const areaPath =
+      `M${x(0).toFixed(1)} ${(H - PAD_BOTTOM).toFixed(1)} ` +
+      pts.map((p, i) => `L${x(i).toFixed(1)} ${y(p.revpar).toFixed(1)}`).join(" ") +
+      ` L${x(pts.length - 1).toFixed(1)} ${(H - PAD_BOTTOM).toFixed(1)} Z`;
+
+    const last = pts[pts.length - 1];
+    const first = pts[0];
+    const deltaPct =
+      first.revpar > 0 ? ((last.revpar - first.revpar) / first.revpar) * 100 : 0;
+    const up = last.revpar >= first.revpar;
+
+    return {
+      ready: true as const,
+      pts,
+      x,
+      y,
+      linePath,
+      areaPath,
+      last,
+      first,
+      deltaPct,
+      up,
+    };
+  }, [history]);
+
+  if (!chart.ready) {
     return (
       <div className="mt-3 border-t border-border pt-3">
         <div className="label-overline">
@@ -58,29 +103,7 @@ export default function RevparTrend({
     );
   }
 
-  const vals = pts.map((p) => p.revpar);
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-  const span = max - min || 1;
-
-  const x = (i: number) =>
-    PAD_X + (i * (W - 2 * PAD_X)) / Math.max(pts.length - 1, 1);
-  const y = (v: number) =>
-    PAD_TOP + (1 - (v - min) / span) * (H - PAD_TOP - PAD_BOTTOM);
-
-  const linePath = pts
-    .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(p.revpar).toFixed(1)}`)
-    .join(" ");
-  const areaPath =
-    `M${x(0).toFixed(1)} ${(H - PAD_BOTTOM).toFixed(1)} ` +
-    pts.map((p, i) => `L${x(i).toFixed(1)} ${y(p.revpar).toFixed(1)}`).join(" ") +
-    ` L${x(pts.length - 1).toFixed(1)} ${(H - PAD_BOTTOM).toFixed(1)} Z`;
-
-  const last = pts[pts.length - 1];
-  const first = pts[0];
-  const deltaPct =
-    first.revpar > 0 ? ((last.revpar - first.revpar) / first.revpar) * 100 : 0;
-  const up = last.revpar >= first.revpar;
+  const { pts, x, y, linePath, areaPath, last, first, deltaPct, up } = chart;
 
   return (
     <div className="mt-3 border-t border-border pt-3">
@@ -188,3 +211,5 @@ export default function RevparTrend({
     </div>
   );
 }
+
+export default memo(RevparTrend);

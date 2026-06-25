@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { BUCKET_COLORS, BUCKET_LABELS, HotelFeature } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { featureKey } from "./PropertyList";
@@ -71,7 +71,7 @@ type CompareTrayProps = {
   max?: number;
 };
 
-export default function CompareTray({
+function CompareTray({
   items,
   sortedRevpars,
   onRemove,
@@ -84,63 +84,70 @@ export default function CompareTray({
     [items, sortedRevpars]
   );
 
-  if (items.length === 0) return null;
-
   // Build comparable metric rows. `nums` drives best-of highlighting (max wins).
-  const rows: MetricRow[] = [
-    {
-      label: "RevPAR",
-      values: items.map((f) => fmtMoney(f.properties.revpar)),
-      nums: items.map((f) => f.properties.revpar),
-    },
-    {
-      label: "Rank",
-      values: percentiles.map((p) => (p == null ? "—" : `${p}th pct`)),
-      nums: percentiles,
-    },
-    {
-      label: "Rooms",
-      values: items.map((f) =>
-        f.properties.rooms != null ? f.properties.rooms.toLocaleString() : "—"
-      ),
-      nums: items.map((f) => f.properties.rooms),
-    },
-    {
-      label: "Revenue",
-      values: items.map((f) => fmtMoney(f.properties.revenue)),
-      nums: items.map((f) => f.properties.revenue),
-    },
-    {
-      label: "ADR",
-      values: items.map((f) => fmtMoney(f.properties.adr)),
-      nums: items.map((f) => f.properties.adr),
-    },
-    {
-      label: "Occupancy",
-      values: items.map((f) => pct(f.properties.occupancy)),
-      nums: items.map((f) => f.properties.occupancy),
-    },
-  ];
+  const rows = useMemo<MetricRow[]>(
+    () => [
+      {
+        label: "RevPAR",
+        values: items.map((f) => fmtMoney(f.properties.revpar)),
+        nums: items.map((f) => f.properties.revpar),
+      },
+      {
+        label: "Rank",
+        values: percentiles.map((p) => (p == null ? "—" : `${p}th pct`)),
+        nums: percentiles,
+      },
+      {
+        label: "Rooms",
+        values: items.map((f) =>
+          f.properties.rooms != null ? f.properties.rooms.toLocaleString() : "—"
+        ),
+        nums: items.map((f) => f.properties.rooms),
+      },
+      {
+        label: "Revenue",
+        values: items.map((f) => fmtMoney(f.properties.revenue)),
+        nums: items.map((f) => f.properties.revenue),
+      },
+      {
+        label: "ADR",
+        values: items.map((f) => fmtMoney(f.properties.adr)),
+        nums: items.map((f) => f.properties.adr),
+      },
+      {
+        label: "Occupancy",
+        values: items.map((f) => pct(f.properties.occupancy)),
+        nums: items.map((f) => f.properties.occupancy),
+      },
+    ],
+    [items, percentiles]
+  );
 
   // Index of the best (max) value per row; -1 when fewer than 2 real values or
   // a tie at the top (don't crown ties — keeps it honest).
-  const bestIdx: number[] = rows.map((row) => {
-    const present = row.nums
-      .map((n, i) => ({ n, i }))
-      .filter((x) => x.n != null) as { n: number; i: number }[];
-    if (present.length < 2) return -1;
-    let best = present[0];
-    let tie = false;
-    for (const x of present.slice(1)) {
-      if (x.n > best.n) {
-        best = x;
-        tie = false;
-      } else if (x.n === best.n) {
-        tie = true;
-      }
-    }
-    return tie ? -1 : best.i;
-  });
+  const bestIdx = useMemo<number[]>(
+    () =>
+      rows.map((row) => {
+        const present = row.nums
+          .map((n, i) => ({ n, i }))
+          .filter((x) => x.n != null) as { n: number; i: number }[];
+        if (present.length < 2) return -1;
+        let best = present[0];
+        let tie = false;
+        for (const x of present.slice(1)) {
+          if (x.n > best.n) {
+            best = x;
+            tie = false;
+          } else if (x.n === best.n) {
+            tie = true;
+          }
+        }
+        return tie ? -1 : best.i;
+      }),
+    [rows]
+  );
+
+  if (items.length === 0) return null;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-2 z-30 flex justify-center px-2 print:hidden md:bottom-4">
@@ -252,3 +259,5 @@ export default function CompareTray({
     </div>
   );
 }
+
+export default memo(CompareTray);

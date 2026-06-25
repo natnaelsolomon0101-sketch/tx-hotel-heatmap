@@ -13,7 +13,7 @@ export default function BriefButton() {
       onClick={() => window.print()}
       title="Print market brief"
       aria-label="Print market brief"
-      className="flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 md:px-3"
+      className="flex h-9 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-muted-foreground transition-base hover:bg-muted md:px-3"
     >
       <svg
         viewBox="0 0 24 24"

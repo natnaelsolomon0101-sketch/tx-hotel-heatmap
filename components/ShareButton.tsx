@@ -91,6 +91,7 @@ export default function ShareButton({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<CopiedWhat>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -170,6 +171,12 @@ export default function ShareButton({
     []
   );
 
+  // When the popover opens, move focus into the dialog so keyboard and screen
+  // reader users land on the first action.
+  useEffect(() => {
+    if (open) dialogRef.current?.querySelector<HTMLElement>("button")?.focus();
+  }, [open]);
+
   // Keep the readonly input current whenever the popover is open.
   const shareUrl = open ? buildUrl() : "";
 
@@ -192,8 +199,10 @@ export default function ShareButton({
 
       {open && (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-label="Share this view"
+          aria-modal="true"
           className="absolute right-0 top-11 z-50 w-72 rounded-2xl bg-surface p-3 shadow-md ring-1 ring-border"
         >
           <div className="label-overline">
@@ -236,6 +245,14 @@ export default function ShareButton({
           </label>
         </div>
       )}
+
+      <span role="status" aria-live="polite" className="sr-only">
+        {copied === "link"
+          ? "Link copied to clipboard"
+          : copied === "summary"
+          ? "Filter summary copied to clipboard"
+          : ""}
+      </span>
     </div>
   );
 }

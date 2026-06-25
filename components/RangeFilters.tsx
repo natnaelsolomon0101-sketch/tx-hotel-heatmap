@@ -101,6 +101,11 @@ function DualRange({
           style={{ zIndex: 5 }}
         />
       </div>
+      {disabled && (
+        <p className="mt-1 text-[11px] leading-snug text-subtle">
+          Only one value in range for the current filter.
+        </p>
+      )}
       <style jsx>{`
         .range-thumb {
           pointer-events: none;
@@ -184,7 +189,8 @@ export default function RangeFilters({
           type="button"
           onClick={onReset}
           disabled={atDefaults}
-          className={`text-xs font-medium transition-base ${
+          aria-label="Reset range filters to full range"
+          className={`text-xs font-medium transition-base disabled:cursor-default ${
             atDefaults
               ? "text-subtle"
               : "text-accent hover:text-[hsl(var(--accent-hover))]"
@@ -215,9 +221,12 @@ export default function RangeFilters({
         />
       </div>
 
-      <p className="mt-2 border-t border-border pt-2 text-meta leading-snug text-subtle">
-        Hotels with no RevPAR or room count are hidden once a range is narrowed.
-      </p>
+      {!atDefaults && (
+        <p className="mt-2 border-t border-border pt-2 text-meta leading-snug text-subtle">
+          Hotels with no RevPAR or room count are hidden once a range is
+          narrowed.
+        </p>
+      )}
     </div>
   );
 }

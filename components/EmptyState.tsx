@@ -42,6 +42,7 @@ export default function EmptyState({
         <button
           type="button"
           onClick={onClear}
+          aria-label={clearLabel}
           className="rounded-lg bg-ink px-4 py-2 text-meta font-semibold text-white transition-base hover:bg-ink-hover"
         >
           {clearLabel}

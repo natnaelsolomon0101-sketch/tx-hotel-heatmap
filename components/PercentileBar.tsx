@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+
 import { percentileDescriptor, roundPct } from "@/lib/percentile";
 
 /**
@@ -9,7 +11,7 @@ import { percentileDescriptor, roundPct } from "@/lib/percentile";
  * `value` is a 0–100 percentile. When null the bar is hidden and a dash shown.
  * `note` overrides the auto descriptor (e.g. "only property in city").
  */
-export default function PercentileBar({
+function PercentileBar({
   label,
   value,
   note,
@@ -79,3 +81,5 @@ export default function PercentileBar({
     </div>
   );
 }
+
+export default memo(PercentileBar);
