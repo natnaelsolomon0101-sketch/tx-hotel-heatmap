@@ -1341,6 +1341,11 @@ export default function MapView() {
           <Map
             defaultCenter={TEXAS_CENTER}
             defaultZoom={TEXAS_ZOOM}
+            minZoom={3}
+            restriction={{
+              latLngBounds: { north: 85, south: -85, west: -179.9, east: 179.9 },
+              strictBounds: false,
+            }}
             gestureHandling="greedy"
             disableDefaultUI
             clickableIcons={false}
