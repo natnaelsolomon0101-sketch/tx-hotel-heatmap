@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import {
   Bucket,
   BUCKET_COLORS,
@@ -40,7 +40,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 // ---------------------------------------------------------------------------
 // 1. RevPAR distribution histogram (with median marker).
 // ---------------------------------------------------------------------------
-function RevparHistogram({
+const RevparHistogram = memo(function RevparHistogram({
   values,
   median,
 }: {
@@ -149,12 +149,12 @@ function RevparHistogram({
       )}
     </svg>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // 2. Bucket breakdown — horizontal stacked bar + legend with counts/%.
 // ---------------------------------------------------------------------------
-function BucketBreakdown({ buckets }: { buckets: Record<Bucket, number> }) {
+const BucketBreakdown = memo(function BucketBreakdown({ buckets }: { buckets: Record<Bucket, number> }) {
   const total = ALL_BUCKETS.reduce((s, b) => s + buckets[b], 0);
   const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
 
@@ -196,12 +196,12 @@ function BucketBreakdown({ buckets }: { buckets: Record<Bucket, number> }) {
       </ul>
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // 3. Top markets by avg RevPAR — clickable horizontal bars.
 // ---------------------------------------------------------------------------
-function TopMarkets({
+const TopMarkets = memo(function TopMarkets({
   rows,
   onSelectMarket,
 }: {
@@ -251,12 +251,12 @@ function TopMarkets({
       })}
     </ul>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // 4. RevPAR vs rooms scatter plot (log rooms on x, RevPAR on y).
 // ---------------------------------------------------------------------------
-function ScatterPlot({
+const ScatterPlot = memo(function ScatterPlot({
   points,
   onSelectHotel,
 }: {
@@ -383,12 +383,12 @@ function ScatterPlot({
       })}
     </svg>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // 5. Outlier finder — hotels far from city median.
 // ---------------------------------------------------------------------------
-function OutlierList({
+const OutlierList = memo(function OutlierList({
   outliers,
   onSelectHotel,
 }: {
@@ -452,12 +452,12 @@ function OutlierList({
       )}
     </ul>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // 6. City leaderboard — top cities by avg RevPAR as ranked bars.
 // ---------------------------------------------------------------------------
-function CityLeaderboard({
+const CityLeaderboard = memo(function CityLeaderboard({
   marketRows,
   onSelectMarket,
 }: {
@@ -511,12 +511,12 @@ function CityLeaderboard({
       })}
     </ol>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // 7. Revenue concentration — what % from top 10% of hotels.
 // ---------------------------------------------------------------------------
-function RevenueConcentration({
+const RevenueConcentration = memo(function RevenueConcentration({
   concentration,
 }: {
   concentration: RevenueConcentrationData;
@@ -556,7 +556,7 @@ function RevenueConcentration({
       </p>
     </div>
   );
-}
+});
 
 export default function AnalyticsPanel({
   inScope,

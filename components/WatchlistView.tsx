@@ -6,7 +6,7 @@ import { featureKey } from "./PropertyList";
 import { downloadCsv } from "@/lib/csv";
 import { money, int, titleCase } from "@/lib/format";
 import EmptyState from "./EmptyState";
-import { BookmarkIcon } from "./icons";
+import { BookmarkIcon, DownloadIcon } from "./icons";
 
 type WatchlistViewProps = {
   /** Full feature set; saved hotels are resolved out of this by key. */
@@ -22,14 +22,6 @@ type WatchlistViewProps = {
   /** Currently selected feature key, for row highlight. */
   selectedKey: string | null;
 };
-
-function ExportGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-    </svg>
-  );
-}
 
 function WatchlistView({
   features,
@@ -70,7 +62,7 @@ function WatchlistView({
             title="Export watchlist to CSV"
             className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
           >
-            <ExportGlyph />
+            <DownloadIcon />
             Export watchlist CSV
           </button>
           <button
@@ -89,7 +81,7 @@ function WatchlistView({
         {saved.length === 0 ? (
           <EmptyState
             title="No saved properties"
-            message="Tap the bookmark on any property to save it here for later — your list persists across sessions."
+            message="Tap the bookmark on any property to save it here for later. Your list persists across sessions."
           />
         ) : (
           <ul className="divide-y divide-border">

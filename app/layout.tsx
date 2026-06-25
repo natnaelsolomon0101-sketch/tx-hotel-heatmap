@@ -16,14 +16,14 @@ export const metadata: Metadata = {
   openGraph: {
     title: "TX Hotel RevPAR Intelligence",
     description:
-      "Interactive RevPAR map of 10,000+ Texas hotels — filter, search, and export by market and performance.",
+      "Interactive RevPAR map of 10,000+ Texas hotels. Filter, search, and export by market and performance.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "TX Hotel RevPAR Intelligence",
     description:
-      "Interactive RevPAR map of 10,000+ Texas hotels — filter, search, and export.",
+      "Interactive RevPAR map of 10,000+ Texas hotels. Filter, search, and export.",
   },
 };
 

@@ -3,6 +3,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Bucket, BUCKET_LABELS, HotelHistory, HotelProperties } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
+import { titleCase } from "@/lib/format";
 import { HotelPercentiles } from "@/lib/percentile";
 import PercentileBar from "./PercentileBar";
 import RevparTrend from "./RevparTrend";
@@ -173,9 +174,6 @@ function PropertyCard({
     touchStartY.current = null;
     setDragY(0);
   };
-
-  const titleCase = (s: string) =>
-    s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
   const fullAddress = [
     titleCase(hotel.address),

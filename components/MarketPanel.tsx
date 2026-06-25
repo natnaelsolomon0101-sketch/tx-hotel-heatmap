@@ -1,39 +1,21 @@
 "use client";
 
 import { memo } from "react";
-import { BUCKET_COLORS } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { MarketRow } from "@/lib/markets";
 import { exportMarkets } from "@/lib/csv";
+import ShareBar from "@/components/ShareBar";
 
 type MarketPanelProps = {
   rows: MarketRow[];
   onSelectMarket: (city: string) => void;
 };
 
-// Tiny stacked red/yellow/gray share bar — mirrors the RevPAR scale colors.
-function ShareBar({ shares }: { shares: MarketRow["shares"] }) {
-  return (
-    <span className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted">
-      {(["red", "yellow", "gray"] as const).map((b) =>
-        shares[b] > 0 ? (
-          <span
-            key={b}
-            className="h-full"
-            style={{
-              width: `${shares[b] * 100}%`,
-              backgroundColor: BUCKET_COLORS[b],
-            }}
-          />
-        ) : null
-      )}
-    </span>
-  );
-}
-
 function ExportGlyph() {
   return (
     <svg
+      aria-hidden="true"
+      focusable={false}
       viewBox="0 0 24 24"
       className="h-3.5 w-3.5"
       fill="none"
@@ -88,6 +70,7 @@ function MarketPanel({ rows, onSelectMarket }: MarketPanelProps) {
                 <button
                   type="button"
                   onClick={() => onSelectMarket(r.city)}
+                  aria-label={`Rank ${i + 1}: ${r.city}, ${r.count.toLocaleString()} hotels, average RevPAR ${fmtMoney(r.avgRevpar)}. Zoom to this market.`}
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-base hover:bg-muted"
                 >
                   <span className="w-5 shrink-0 text-right text-[11px] font-semibold tabular-nums text-subtle">

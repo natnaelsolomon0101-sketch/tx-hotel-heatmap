@@ -5,7 +5,7 @@ import { BUCKET_COLORS, HotelFeature } from "@/lib/types";
 import { roundPct } from "@/lib/percentile";
 import { money, int, titleCase } from "@/lib/format";
 import EmptyState from "@/components/EmptyState";
-import { BookmarkIcon } from "@/components/icons";
+import { BookmarkIcon, DownloadIcon } from "@/components/icons";
 
 export type SortKey = "revpar-desc" | "revpar-asc" | "rooms-desc" | "name-asc";
 
@@ -54,14 +54,6 @@ export function featureKey(f: HotelFeature) {
   return `${f.properties.name}|${lng.toFixed(4)},${lat.toFixed(4)}`;
 }
 
-function DownloadGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-    </svg>
-  );
-}
-
 type RowProps = {
   feature: HotelFeature;
   active: boolean;
@@ -100,6 +92,7 @@ const PropertyRow = memo(function PropertyRow({
       <button
         onClick={() => onSelect(feature)}
         aria-current={active ? "true" : undefined}
+        aria-label={`${titleCase(p.name)}, ${titleCase(p.city)}, ${p.state}${p.rooms != null ? `, ${p.rooms} rooms` : ""}. RevPAR ${money(p.revpar)}.`}
         className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
       >
         <span
@@ -136,6 +129,7 @@ const PropertyRow = memo(function PropertyRow({
         <button
           type="button"
           onClick={() => onToggleCompare(feature)}
+          aria-label={compared ? `Remove ${titleCase(p.name)} from compare` : `Add ${titleCase(p.name)} to compare`}
           aria-pressed={compared}
           disabled={compareDisabled}
           title={
@@ -250,7 +244,7 @@ function PropertyList({
             title="Export current list to CSV"
             className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-muted px-2.5 text-sm font-medium text-muted-foreground ring-1 ring-border transition-base hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-40"
           >
-            <DownloadGlyph />
+            <DownloadIcon />
             CSV
           </button>
           {onExportXls && (

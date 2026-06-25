@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { BUCKET_COLORS, BUCKET_LABELS, Bucket, HotelFeature } from "@/lib/types";
 import { computeStats, fmtMoney } from "@/lib/stats";
 import { titleCase } from "@/lib/format";
@@ -20,7 +20,7 @@ const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
 
 // Shared summary panel used by both the polygon lasso and the radius tool.
 // Self-contained: computes its own portfolio stats over the contained set.
-export default function AreaSummary({
+function AreaSummary({
   label,
   detail,
   features,
@@ -215,3 +215,5 @@ function Metric({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+export default memo(AreaSummary);

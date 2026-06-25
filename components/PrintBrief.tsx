@@ -2,6 +2,7 @@
 
 import { BUCKET_COLORS, BUCKET_LABELS, Bucket, HotelFeature } from "@/lib/types";
 import { PortfolioStats, fmtMoney, fmtMarket } from "@/lib/stats";
+import { titleCase } from "@/lib/format";
 
 type PrintBriefProps = {
   stats: PortfolioStats;
@@ -10,9 +11,6 @@ type PrintBriefProps = {
 };
 
 const BUCKET_ORDER: Bucket[] = ["red", "yellow", "gray"];
-
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
 const pct = (n: number, total: number) =>
   total ? `${Math.round((n / total) * 100)}%` : "0%";

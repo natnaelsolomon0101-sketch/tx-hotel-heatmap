@@ -61,10 +61,11 @@ export default function LegendFilter({
   return (
     <div className="shrink-0 rounded-panel bg-surface p-2.5 shadow-sm ring-1 ring-border md:p-3">
       <div className="mb-1.5 flex items-center justify-between md:mb-2">
-        <h2 className="label-overline">RevPAR scale</h2>
+        <h2 id="revpar-scale-heading" className="label-overline">RevPAR scale</h2>
         <button
           type="button"
           onClick={onReset}
+          aria-label="Show all RevPAR tiers"
           className={`text-xs font-medium transition-base ${
             allOn
               ? "text-subtle"
@@ -77,7 +78,11 @@ export default function LegendFilter({
       </div>
 
       {/* Compact horizontal chips on mobile so the property list keeps room. */}
-      <div className="flex gap-1.5 md:hidden">
+      <div
+        className="flex gap-1.5 md:hidden"
+        role="group"
+        aria-labelledby="revpar-scale-heading"
+      >
         {ROWS.map(({ bucket, title, soft }) => {
           const on = active.has(bucket);
           return (
@@ -105,7 +110,11 @@ export default function LegendFilter({
       </div>
 
       {/* Detailed vertical legend on desktop. */}
-      <div className="hidden flex-col gap-1 md:flex">
+      <div
+        className="hidden flex-col gap-1 md:flex"
+        role="group"
+        aria-labelledby="revpar-scale-heading"
+      >
         {ROWS.map(({ bucket, title, sub, swatch }) => {
           const on = active.has(bucket);
           return (

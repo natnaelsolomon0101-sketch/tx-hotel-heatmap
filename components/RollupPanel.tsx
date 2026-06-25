@@ -1,10 +1,10 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import { BUCKET_COLORS } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
 import { RollupRow } from "@/lib/markets";
 import { RollupDim, RollupSort, sortRollup } from "@/lib/rollups";
+import ShareBar from "@/components/ShareBar";
 
 type RollupPanelProps = {
   /** Pre-aggregated rows for the active dimension (avg-RevPAR-desc from lib). */
@@ -15,29 +15,6 @@ type RollupPanelProps = {
   /** Called with the row key (a ZIP string or a city name) on row click. */
   onSelect: (dim: RollupDim, key: string) => void;
 };
-
-// Tiny stacked red/yellow/gray share bar — identical to MarketPanel's ShareBar.
-function ShareBar({ shares }: { shares: RollupRow["shares"] }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted"
-    >
-      {(["red", "yellow", "gray"] as const).map((b) =>
-        shares[b] > 0 ? (
-          <span
-            key={b}
-            className="h-full"
-            style={{
-              width: `${shares[b] * 100}%`,
-              backgroundColor: BUCKET_COLORS[b],
-            }}
-          />
-        ) : null
-      )}
-    </span>
-  );
-}
 
 // Segmented two-option toggle (ZIP | City, or Avg | Count), styled to match the
 // right-column tab row in MapView.

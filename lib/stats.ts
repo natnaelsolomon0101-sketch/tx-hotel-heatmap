@@ -66,14 +66,16 @@ export function computeStats(features: HotelFeature[]): PortfolioStats {
 const titleCase = (s: string) =>
   s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
+// Cached at module scope so we build the formatter once instead of on every
+// fmtMoney call (mirrors the USD0 pattern in lib/format.ts).
+const USD0 = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
 export const fmtMoney = (n: number | null): string =>
-  n == null
-    ? "—"
-    : n.toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      });
+  n == null ? "—" : USD0.format(n);
 
 export const fmtMarket = (m: PortfolioStats["topMarket"]): string =>
   m ? titleCase(m.city) : "—";

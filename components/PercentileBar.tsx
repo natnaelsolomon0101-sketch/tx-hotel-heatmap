@@ -60,7 +60,7 @@ function PercentileBar({
       {pct != null && (
         <div className="relative mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div
-            className="h-full rounded-full transition-[width]"
+            className="h-full rounded-full transition-[width] motion-reduce:transition-none"
             style={{ width: `${pct}%`, backgroundColor: `hsl(var(${tierVar}))` }}
             role="meter"
             aria-valuenow={pct}

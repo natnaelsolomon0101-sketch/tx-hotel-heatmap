@@ -45,10 +45,11 @@ export default function BrandFilter({
   return (
     <div className="hidden shrink-0 rounded-panel bg-surface p-3 shadow-sm ring-1 ring-border md:block">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="label-overline">Brand</h2>
+        <h2 id="brand-filter-heading" className="label-overline">Brand</h2>
         <button
           type="button"
           onClick={onReset}
+          aria-label="Show all brands"
           disabled={allSelected}
           className={`text-xs font-medium transition-base ${
             allSelected
@@ -60,7 +61,11 @@ export default function BrandFilter({
         </button>
       </div>
 
-      <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+      <div
+        role="group"
+        aria-labelledby="brand-filter-heading"
+        className="flex max-h-40 flex-col gap-1.5 overflow-y-auto"
+      >
         {ALL_BRANDS.map((brand) => {
           const checked = selected.has(brand);
           return (

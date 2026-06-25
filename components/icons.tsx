@@ -96,6 +96,16 @@ export function CloseIcon({ className }: IconProps) {
   );
 }
 
+// Download / export glyph (vertical arrow into tray); defaults to the 3.5 size used by list export buttons.
+export function DownloadIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className ?? "h-3.5 w-3.5"} aria-hidden="true" focusable={false}
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+    </svg>
+  );
+}
+
 export function BookmarkIcon({
   className,
   filled,
