@@ -3,11 +3,9 @@
 import { memo, useMemo } from "react";
 import { BUCKET_COLORS, BUCKET_LABELS, HotelFeature } from "@/lib/types";
 import { fmtMoney } from "@/lib/stats";
+import { titleCase } from "@/lib/format";
 import { featureKey } from "./PropertyList";
 import { CloseIcon } from "./icons";
-
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
 const pct = (n: number | null): string => {
   if (n == null || Number.isNaN(n)) return "—";

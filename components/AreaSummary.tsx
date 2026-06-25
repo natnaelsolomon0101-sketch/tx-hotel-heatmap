@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { BUCKET_COLORS, BUCKET_LABELS, Bucket, HotelFeature } from "@/lib/types";
 import { computeStats, fmtMoney } from "@/lib/stats";
+import { titleCase } from "@/lib/format";
 
 type AreaSummaryProps = {
   /** Human label for the drawn area, e.g. "Drawn area" or "3 mi radius". */
@@ -14,9 +15,6 @@ type AreaSummaryProps = {
   onExport: () => void;
   onClear: () => void;
 };
-
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
 
@@ -92,7 +90,11 @@ export default function AreaSummary({
                 {stats.withRevpar.toLocaleString()} with data
               </span>
             </div>
-            <span className="flex h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+            <span
+              role="img"
+              aria-label={`RevPAR mix: ${stats.buckets.red.toLocaleString()} high, ${stats.buckets.yellow.toLocaleString()} mid, ${stats.buckets.gray.toLocaleString()} low or no data`}
+              className="flex h-1.5 w-full overflow-hidden rounded-full bg-gray-100"
+            >
               {ALL_BUCKETS.map((b) =>
                 stats.buckets[b] > 0 ? (
                   <span
@@ -114,6 +116,7 @@ export default function AreaSummary({
                   title={BUCKET_LABELS[b]}
                 >
                   <span
+                    aria-hidden="true"
                     className="h-2 w-2 rounded-full"
                     style={{ backgroundColor: BUCKET_COLORS[b] }}
                   />
@@ -141,6 +144,7 @@ export default function AreaSummary({
                       className="flex items-center gap-2.5 px-3 py-2"
                     >
                       <span
+                        aria-hidden="true"
                         className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
                         style={{ backgroundColor: BUCKET_COLORS[p.bucket] }}
                       />
@@ -174,6 +178,7 @@ export default function AreaSummary({
           className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
         >
           <svg
+            aria-hidden="true"
             viewBox="0 0 24 24"
             className="h-3.5 w-3.5"
             fill="none"

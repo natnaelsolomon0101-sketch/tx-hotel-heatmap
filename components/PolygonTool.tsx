@@ -106,7 +106,11 @@ export default function PolygonTool({
   // Floating drawing hint, centered under the header.
   return (
     <div className="pointer-events-none absolute inset-x-0 top-[68px] z-30 flex justify-center print:hidden">
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-gray-900/95 px-3 py-1.5 text-xs text-white shadow-card backdrop-blur">
+      <div
+        className="pointer-events-auto flex items-center gap-2 rounded-full bg-gray-900/95 px-3 py-1.5 text-xs text-white shadow-card backdrop-blur"
+        role="status"
+        aria-live="polite"
+      >
         <span className="tabular-nums">
           {vertices.length === 0
             ? "Click the map to drop the first point"
@@ -136,6 +140,7 @@ export default function PolygonTool({
             stroke="currentColor"
             strokeWidth={2}
             strokeLinecap="round"
+            aria-hidden="true"
           >
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>

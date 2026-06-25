@@ -85,18 +85,30 @@ export function computeScatterPlotData(
 }
 
 /**
- * Detect hotels whose RevPAR is significantly different from their city median.
- * Returns outliers sorted by absolute z-score (most extreme first).
- * Requires at least 5 hotels per city to compute median.
+ * A single RevPAR outlier relative to its city median.
  */
-export function computeOutliers(
-  features: HotelFeature[]
-): {
+export interface Outlier {
   feature: HotelFeature;
   cityMedian: number;
   zscore: number;
   ratio: number;
-}[] {
+}
+
+/**
+ * Result of {@link computeRevenueConcentration}.
+ */
+export interface RevenueConcentration {
+  topPct: number;
+  totalRevenue: number | null;
+  concentrated: number | null;
+}
+
+/**
+ * Detect hotels whose RevPAR is significantly different from their city median.
+ * Returns outliers sorted by absolute z-score (most extreme first).
+ * Requires at least 5 hotels per city to compute median.
+ */
+export function computeOutliers(features: HotelFeature[]): Outlier[] {
   const byCity = new Map<
     string,
     { features: HotelFeature[]; revpars: number[] }
@@ -116,12 +128,7 @@ export function computeOutliers(
   }
 
   // Compute medians and identify outliers
-  const outliers: {
-    feature: HotelFeature;
-    cityMedian: number;
-    zscore: number;
-    ratio: number;
-  }[] = [];
+  const outliers: Outlier[] = [];
 
   for (const group of byCity.values()) {
     if (group.revpars.length < 5) continue; // Min city size
@@ -172,11 +179,7 @@ export function computeOutliers(
  */
 export function computeRevenueConcentration(
   features: HotelFeature[]
-): {
-  topPct: number;
-  totalRevenue: number | null;
-  concentrated: number | null;
-} {
+): RevenueConcentration {
   const withRevenue = features.filter((f) => f.properties.revenue != null);
 
   if (withRevenue.length === 0) {
@@ -199,5 +202,30 @@ export function computeRevenueConcentration(
     topPct,
     totalRevenue: totalRevenue || null,
     concentrated: topRevenue || null,
+  };
+}
+
+/**
+ * Combined analytics result: scatter points, RevPAR outliers, and revenue
+ * concentration for a single in-scope hotel set.
+ */
+export interface Analytics {
+  scatter: ScatterPoint[];
+  outliers: Outlier[];
+  concentration: RevenueConcentration;
+}
+
+/**
+ * Compute scatter, outliers, and revenue concentration in a single orchestrated
+ * call so callers walk the hotel set once at the call site instead of three
+ * times. Returns values byte-identical to invoking the three helpers
+ * independently — this is purely an orchestration/perf wrapper, the formulas
+ * are unchanged.
+ */
+export function computeAnalytics(features: HotelFeature[]): Analytics {
+  return {
+    scatter: computeScatterPlotData(features),
+    outliers: computeOutliers(features),
+    concentration: computeRevenueConcentration(features),
   };
 }

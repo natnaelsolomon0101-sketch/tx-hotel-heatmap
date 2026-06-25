@@ -73,12 +73,11 @@ export default function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
       className="absolute inset-0 z-40 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Keyboard shortcuts"
+      aria-labelledby="shortcuts-title"
     >
       {/* Backdrop */}
-      <button
-        type="button"
-        aria-label="Close keyboard shortcuts"
+      <div
+        aria-hidden="true"
         onClick={onClose}
         className="absolute inset-0 cursor-default bg-[hsl(var(--ink)/0.4)] backdrop-blur-sm"
       />
@@ -89,7 +88,7 @@ export default function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
         className="relative w-full max-w-sm rounded-2xl bg-surface/95 p-4 shadow-md ring-1 ring-border backdrop-blur"
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="label-overline">
+          <h2 id="shortcuts-title" className="label-overline">
             Keyboard shortcuts
           </h2>
           <button
@@ -100,6 +99,7 @@ export default function ShortcutsHelp({ open, onClose }: ShortcutsHelpProps) {
             className="text-subtle transition-base hover:text-foreground"
           >
             <svg
+              aria-hidden="true"
               viewBox="0 0 24 24"
               className="h-4 w-4"
               fill="none"

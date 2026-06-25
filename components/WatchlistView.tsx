@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo } from "react";
 import { BUCKET_COLORS, HotelFeature } from "@/lib/types";
 import { featureKey } from "./PropertyList";
 import { downloadCsv } from "@/lib/csv";
+import { money, int, titleCase } from "@/lib/format";
 import EmptyState from "./EmptyState";
 import { BookmarkIcon } from "./icons";
 
@@ -21,18 +22,6 @@ type WatchlistViewProps = {
   /** Currently selected feature key, for row highlight. */
   selectedKey: string | null;
 };
-
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
-
-const money = (n: number | null) =>
-  n == null
-    ? "—"
-    : n.toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      });
 
 function ExportGlyph() {
   return (
@@ -70,7 +59,7 @@ function WatchlistView({
             Saved
           </h2>
           <span className="text-[11px] tabular-nums text-subtle">
-            {saved.length.toLocaleString()} saved
+            {int(saved.length)} saved
           </span>
         </div>
         <div className="flex items-center gap-2">

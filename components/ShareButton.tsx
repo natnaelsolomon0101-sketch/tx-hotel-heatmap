@@ -90,6 +90,7 @@ export default function ShareButton({
 }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<CopiedWhat>(null);
+  const [fellBack, setFellBack] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -115,6 +116,7 @@ export default function ShareButton({
 
   const flash = (what: CopiedWhat) => {
     setCopied(what);
+    setFellBack(false);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setCopied(null), 1600);
   };
@@ -122,6 +124,7 @@ export default function ShareButton({
   const copyText = async (text: string, what: CopiedWhat) => {
     try {
       await navigator.clipboard.writeText(text);
+      setFellBack(false);
       flash(what);
     } catch {
       // Clipboard API unavailable (insecure context / denied): fall back to
@@ -132,6 +135,7 @@ export default function ShareButton({
         input.select();
       }
       setCopied(null);
+      setFellBack(true);
     }
   };
 
@@ -151,10 +155,14 @@ export default function ShareButton({
     const onDown = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setFellBack(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        setFellBack(false);
+      }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -193,7 +201,7 @@ export default function ShareButton({
       >
         {copied === "link" ? <CheckIcon /> : <ShareIcon />}
         <span className="hidden sm:inline">
-          {copied === "link" ? "Copied!" : "Share"}
+          {copied === "link" ? "Copied" : "Share"}
         </span>
       </button>
 
@@ -243,6 +251,13 @@ export default function ShareButton({
               className="w-full select-all rounded-lg border border-border bg-surface px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             />
           </label>
+
+          {fellBack && (
+            <p className="mt-2 text-[11px] leading-snug text-subtle">
+              Copy didn&apos;t work automatically. The link above is selected for
+              you - press Cmd/Ctrl+C.
+            </p>
+          )}
         </div>
       )}
 
@@ -251,6 +266,8 @@ export default function ShareButton({
           ? "Link copied to clipboard"
           : copied === "summary"
           ? "Filter summary copied to clipboard"
+          : fellBack
+          ? "Automatic copy failed. Press Cmd or Ctrl + C to copy the selected link."
           : ""}
       </span>
     </div>

@@ -3,6 +3,7 @@
 import { RefObject, memo } from "react";
 import { BUCKET_COLORS, HotelFeature } from "@/lib/types";
 import { roundPct } from "@/lib/percentile";
+import { money, int, titleCase } from "@/lib/format";
 import EmptyState from "@/components/EmptyState";
 import { BookmarkIcon } from "@/components/icons";
 
@@ -42,23 +43,11 @@ type PropertyListProps = {
   onToggleSaved?: (key: string) => void;
 };
 
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
-
 const PCT_CHIP: Record<HotelFeature["properties"]["bucket"], string> = {
   red: "bg-revpar-high-soft text-revpar-high",
   yellow: "bg-revpar-mid-soft text-revpar-mid",
   gray: "bg-revpar-low-soft text-revpar-low",
 };
-
-const money = (n: number | null) =>
-  n == null
-    ? "—"
-    : n.toLocaleString("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      });
 
 export function featureKey(f: HotelFeature) {
   const [lng, lat] = f.geometry.coordinates;
@@ -185,7 +174,7 @@ const PropertyRow = memo(function PropertyRow({
   );
 });
 
-export default function PropertyList({
+function PropertyList({
   rows,
   total,
   limit,
@@ -219,8 +208,8 @@ export default function PropertyList({
             className="text-meta font-mono tabular-nums text-subtle"
           >
             {query
-              ? `${total.toLocaleString()} match`
-              : `${total.toLocaleString()} in view`}
+              ? `${int(total)} match`
+              : `${int(total)} in view`}
           </span>
         </div>
         <div className="relative">
@@ -330,10 +319,13 @@ export default function PropertyList({
 
       {total > limit && !query && (
         <div className="border-t border-border px-3 py-2 text-meta text-subtle">
-          Showing top {limit} of {total.toLocaleString()} — zoom in or search to
+          Showing top {limit} of {int(total)}. Zoom in or search to
           narrow.
         </div>
       )}
     </div>
   );
 }
+
+// Memoized: skips re-render when props are referentially stable. NOTE: parent (MapView) still passes two inline-arrow props — onExportXls and getPercentile — which change identity every render; stabilizing those in MapView would let this memo hit on map hover/pan. Out of scope here.
+export default memo(PropertyList);

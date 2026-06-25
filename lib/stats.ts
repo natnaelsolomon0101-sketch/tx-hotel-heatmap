@@ -9,12 +9,13 @@ export interface PortfolioStats {
   buckets: Record<Bucket, number>;
 }
 
-const median = (nums: number[]): number | null => {
+/** Median of a numeric list. Returns null for an empty list. Does not mutate input. */
+export function median(nums: number[]): number | null {
   if (!nums.length) return null;
   const s = [...nums].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-};
+}
 
 // A market must have at least this many hotels (with RevPAR) to qualify as
 // "top market" — keeps tiny resort towns with a couple luxury rentals from

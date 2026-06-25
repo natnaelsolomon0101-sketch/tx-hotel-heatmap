@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const SEEN_KEY = "txh_seen_intro";
 
@@ -31,6 +31,7 @@ const TIPS: { dotClass: string; title: string; body: string }[] = [
 // and renders nothing once dismissed. SSR-safe — stays hidden until mounted.
 export default function Coachmark() {
   const [open, setOpen] = useState(false);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     try {
@@ -49,24 +50,45 @@ export default function Coachmark() {
     }
   };
 
+  // Move focus into the dialog on open, restore it on close, and dismiss on Escape.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.activeElement as HTMLElement | null;
+    closeBtnRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") dismiss();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      prev?.focus?.();
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-2 z-30 flex justify-center px-2 md:bottom-6">
-      <div className="pointer-events-auto w-full max-w-md animate-rise rounded-panel bg-surface shadow-lg ring-1 ring-border backdrop-blur motion-reduce:animate-none p-4 md:p-5">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="coachmark-title"
+        className="pointer-events-auto w-full max-w-md animate-rise rounded-panel bg-surface shadow-lg ring-1 ring-border backdrop-blur motion-reduce:animate-none p-4 md:p-5"
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="label-overline text-muted-foreground">
               Welcome
             </p>
-            <h2 className="mt-0.5 text-display text-foreground">
+            <h2 id="coachmark-title" className="mt-0.5 text-display text-foreground">
               Texas RevPAR intelligence
             </h2>
           </div>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={dismiss}
-            aria-label="Dismiss"
+            aria-label="Dismiss welcome tips"
             className="-mr-1 -mt-1 shrink-0 rounded-full p-1.5 text-subtle transition-base hover:bg-muted hover:text-foreground"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
@@ -85,6 +107,7 @@ export default function Coachmark() {
           {TIPS.map(({ dotClass, title, body }) => (
             <li key={title} className="flex items-start gap-2.5">
               <span
+                aria-hidden="true"
                 className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-surface ${dotClass}`}
               />
               <span className="min-w-0">

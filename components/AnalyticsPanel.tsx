@@ -11,9 +11,10 @@ import { fmtMoney, PortfolioStats } from "@/lib/stats";
 import { MarketRow } from "@/lib/markets";
 import { histogram, niceTicks } from "@/lib/charts";
 import {
-  computeOutliers,
-  computeRevenueConcentration,
-  computeScatterPlotData,
+  computeAnalytics,
+  type Outlier,
+  type RevenueConcentration as RevenueConcentrationData,
+  type ScatterPoint,
 } from "@/lib/analytics";
 import EmptyState from "@/components/EmptyState";
 
@@ -256,13 +257,12 @@ function TopMarkets({
 // 4. RevPAR vs rooms scatter plot (log rooms on x, RevPAR on y).
 // ---------------------------------------------------------------------------
 function ScatterPlot({
-  inScope,
+  points,
   onSelectHotel,
 }: {
-  inScope: HotelFeature[];
+  points: ScatterPoint[];
   onSelectHotel?: (feature: HotelFeature) => void;
 }) {
-  const points = useMemo(() => computeScatterPlotData(inScope), [inScope]);
   if (points.length === 0) {
     return (
       <p className="text-[11px] leading-snug text-subtle">
@@ -392,12 +392,7 @@ function OutlierList({
   outliers,
   onSelectHotel,
 }: {
-  outliers: {
-    feature: HotelFeature;
-    cityMedian: number;
-    zscore: number;
-    ratio: number;
-  }[];
+  outliers: Outlier[];
   onSelectHotel?: (feature: HotelFeature) => void;
 }) {
   if (outliers.length === 0) {
@@ -521,11 +516,12 @@ function CityLeaderboard({
 // ---------------------------------------------------------------------------
 // 7. Revenue concentration — what % from top 10% of hotels.
 // ---------------------------------------------------------------------------
-function RevenueConcentration({ inScope }: { inScope: HotelFeature[] }) {
-  const { topPct, totalRevenue, concentrated } = useMemo(
-    () => computeRevenueConcentration(inScope),
-    [inScope]
-  );
+function RevenueConcentration({
+  concentration,
+}: {
+  concentration: RevenueConcentrationData;
+}) {
+  const { topPct, totalRevenue, concentrated } = concentration;
 
   if (totalRevenue === null || concentrated === null) {
     return (
@@ -577,7 +573,7 @@ export default function AnalyticsPanel({
     [inScope]
   );
 
-  const outliers = useMemo(() => computeOutliers(inScope), [inScope]);
+  const analytics = useMemo(() => computeAnalytics(inScope), [inScope]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface shadow-card ring-1 ring-border backdrop-blur">
@@ -629,13 +625,16 @@ export default function AnalyticsPanel({
 
             <section>
               <SectionHeading>RevPAR vs room count</SectionHeading>
-              <ScatterPlot inScope={inScope} onSelectHotel={onSelectHotel} />
+              <ScatterPlot
+                points={analytics.scatter}
+                onSelectHotel={onSelectHotel}
+              />
             </section>
 
             <section>
               <SectionHeading>Outlier finder</SectionHeading>
               <OutlierList
-                outliers={outliers}
+                outliers={analytics.outliers}
                 onSelectHotel={onSelectHotel}
               />
             </section>
@@ -650,7 +649,7 @@ export default function AnalyticsPanel({
 
             <section>
               <SectionHeading>Revenue concentration</SectionHeading>
-              <RevenueConcentration inScope={inScope} />
+              <RevenueConcentration concentration={analytics.concentration} />
             </section>
 
             <section>

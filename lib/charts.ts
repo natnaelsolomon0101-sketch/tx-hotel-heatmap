@@ -24,7 +24,12 @@ export function histogram(
   values: number[],
   edges: number[] = DEFAULT_REVPAR_EDGES
 ): HistBin[] {
-  const sorted = [...edges].sort((a, b) => a - b);
+  // DEFAULT_REVPAR_EDGES is already sorted at module scope, so skip the
+  // copy+sort on the common default path; only custom edges need normalizing.
+  const sorted =
+    edges === DEFAULT_REVPAR_EDGES
+      ? DEFAULT_REVPAR_EDGES
+      : [...edges].sort((a, b) => a - b);
   const bins: HistBin[] = [];
   for (let i = 0; i < sorted.length; i++) {
     const x0 = sorted[i];

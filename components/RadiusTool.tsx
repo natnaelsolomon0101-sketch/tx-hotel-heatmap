@@ -109,12 +109,18 @@ export default function RadiusTool({
         className="pointer-events-auto -translate-x-1/2 -translate-y-[calc(100%+14px)]
           rounded-full bg-white/95 px-1 py-1 shadow-card ring-1 ring-black/5 backdrop-blur"
       >
-        <div className="flex items-center gap-0.5">
+        <div
+          className="flex items-center gap-0.5"
+          role="group"
+          aria-label="Search radius"
+        >
           {RADIUS_STEPS.map((r) => (
             <button
               key={r}
               type="button"
               onClick={() => onRadiusChange(r)}
+              aria-pressed={r === radius}
+              aria-label={`${r} mile radius`}
               className={`rounded-full px-2 py-1 text-[11px] font-semibold tabular-nums transition ${
                 r === radius
                   ? "bg-gray-900 text-white"
@@ -139,6 +145,7 @@ export default function RadiusTool({
               stroke="currentColor"
               strokeWidth={2}
               strokeLinecap="round"
+              aria-hidden="true"
             >
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>

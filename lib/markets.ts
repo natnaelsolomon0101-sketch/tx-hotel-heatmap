@@ -1,4 +1,5 @@
 import { Bucket, HotelFeature } from "./types";
+import { median as medianOrNull } from "@/lib/stats";
 
 /** A generic area-level rollup row (city, ZIP, or any other key). */
 export interface RollupRow {
@@ -16,12 +17,9 @@ export interface MarketRow extends RollupRow {
   city: string;
 }
 
-const median = (nums: number[]): number => {
-  if (!nums.length) return 0;
-  const s = [...nums].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-};
+// markets historically returned 0 (not null) for an empty list; preserve that
+// exact contract by coalescing the canonical helper's null to 0.
+const median = (nums: number[]): number => medianOrNull(nums) ?? 0;
 
 // A market must have at least this many hotels to qualify — keeps tiny towns
 // with a couple of properties from cluttering the ranking. Mirrors the spirit
