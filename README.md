@@ -93,12 +93,27 @@ GEOCODER=census npm run build-data        # force the free Census geocoder
 npm run build-data -- --google            # force Google (rooftop)
 npm run build-data -- --limit 200         # only the first 200 rows (quick test)
 npm run build-data -- --no-geocode        # use the cache only, skip API calls
+npm run build-history                     # recompute RevPAR + trend from data/periods/
 ```
+
+`build-history` is the source of truth for RevPAR. It reads the per-period
+Comptroller files in `data/periods/` and writes two **per-night** figures:
+
+- **T12 RevPAR** = trailing-12-month revenue ÷ rooms ÷ 365 (last four complete
+  quarters). This is the headline metric the heatmap buckets, filters, and
+  sorts on (`properties.revpar`).
+- **Last-month RevPAR** = the latest reported month's revenue ÷ rooms ÷
+  days-in-month (`properties.lastMonthRevpar`).
+
+Run `build-data` first (geocoding + base geojson), then `build-history` to lay
+the correct RevPAR on top.
 
 ### Notes on this dataset
 
-- The source is **monthly** Texas Comptroller data, so `RevPAR` here is *period
-  revenue ÷ available rooms* (monthly), not a nightly figure.
+- The Comptroller files report revenue **per period** — a single month for the
+  monthly files, a quarter for the quarterly files — but their `RevPAR` column
+  always divides by 90 days. `build-history` ignores that column and recomputes
+  RevPAR per night from the raw revenue on the correct day count.
 - The export has **no ADR, occupancy, lat/lng, or photo** columns — those render
   as "—"/no-photo. The pipeline still supports them for richer exports.
 - `data/hotels.csv` and `data/geocache.json` are git-ignored (large / owner PII).

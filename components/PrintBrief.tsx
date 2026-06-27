@@ -148,9 +148,9 @@ export default function PrintBrief({ stats, topRows, period }: PrintBriefProps) 
       </section>
 
       <footer className="mt-6 border-t border-gray-200 pt-2 text-[10px] text-gray-400">
-        TX Hotel RevPAR Intelligence &middot; RevPAR = period room revenue ÷
-        available rooms. Figures reflect the current map filter and viewport at
-        time of generation.
+        TX Hotel RevPAR Intelligence &middot; RevPAR = trailing-12-month (T12)
+        revenue ÷ rooms ÷ 365, per night. Figures reflect the current map filter
+        and viewport at time of generation.
       </footer>
     </div>
   );

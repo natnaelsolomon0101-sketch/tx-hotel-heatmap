@@ -33,8 +33,12 @@ const CONFIG = {
   // Only keep hotels physically located in this state (set to null to keep all).
   stateFilter: "TX",
 
-  // Days in the reporting period — only used when deriving RevPAR for rows that
-  // don't already carry a RevPAR value (revenue / (rooms * daysInPeriod)).
+  // Days in the source file's reporting period. data/hotels.csv is the latest
+  // single MONTH (currently May, 31 days), so this is the per-night divisor for
+  // the provisional RevPAR computed here. NOTE: build-history.mjs runs after
+  // this and REPLACES properties.revpar with the headline T12 RevPAR
+  // (trailing-12mo revenue / rooms / 365); the value set here only stands in if
+  // build-history is never run.
   daysInPeriod: 31,
 
   // Data-quality guards. The Comptroller file is full of aggregate / non-hotel
@@ -46,7 +50,7 @@ const CONFIG = {
   // (-> gray, sinks to the bottom of the list) rather than removed.
   excludeNamePattern: /^\s*(city|county|town|village|state)\s+of\b/i,
   minRooms: 2, // 1-room filings are placeholders, not real room counts
-  maxRevpar: 20000, // monthly RevPAR ceiling (~$650/night/room)
+  maxRevpar: 2000, // per-night RevPAR ceiling ($/room/night) — rejects data errors
 
 
 
@@ -464,11 +468,15 @@ async function main() {
   let hotels: Hotel[] = records.map((rec) => {
     const rooms = cleanNumber(get(rec, "rooms"));
     const revenue = cleanNumber(get(rec, "revenue"));
-    // RevPAR = revenue / rooms / 90 (Nate's definition). Computed from
-    // revenue + rooms on one consistent /90 basis (the source RevPAR column
-    // mixed bases, so we don't trust it).
+    // Provisional per-night RevPAR for the source file's single month:
+    // revenue / rooms / daysInPeriod. The source RevPAR column always divides
+    // by 90 days regardless of the actual period, so we don't trust it and
+    // recompute on the correct day count. build-history.mjs later REPLACES this
+    // with the headline T12 RevPAR (trailing-12mo revenue / rooms / 365).
     let revpar =
-      revenue != null && rooms && rooms > 0 ? revenue / (rooms * 90) : null;
+      revenue != null && rooms && rooms > 0
+        ? revenue / (rooms * CONFIG.daysInPeriod)
+        : null;
     // Reject untrusted RevPAR: 1-room placeholders and implausible highs.
     if (
       (rooms != null && rooms < CONFIG.minRooms) ||

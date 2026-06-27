@@ -105,6 +105,12 @@ function RevparTrend({
 
   const { pts, x, y, linePath, areaPath, last, first, deltaPct, up } = chart;
 
+  const trendLabel = `RevPAR trend, ${qLabel(first.q)} to ${qLabel(last.q)}: ${
+    up ? "up" : "down"
+  } ${Math.abs(deltaPct).toFixed(0)} percent, ${money0(first.revpar)} to ${money0(
+    last.revpar,
+  )}`;
+
   return (
     <div className="mt-3 border-t border-border pt-3">
       <div className="flex items-baseline justify-between">
@@ -124,7 +130,7 @@ function RevparTrend({
         viewBox={`0 0 ${W} ${H}`}
         className="mt-2 w-full"
         role="img"
-        aria-label="RevPAR trend from 2023 to present"
+        aria-label={trendLabel}
       >
         <defs>
           <linearGradient id="revpar-fill" x1="0" y1="0" x2="0" y2="1">
@@ -195,7 +201,7 @@ function RevparTrend({
           <div className="label-overline">
             T12 RevPAR
             <span className="ml-1 font-normal normal-case text-subtle">
-              avg/mo
+              /night
             </span>
           </div>
           <div className="text-data text-foreground">

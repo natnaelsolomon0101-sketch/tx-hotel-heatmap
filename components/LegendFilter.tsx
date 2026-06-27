@@ -155,7 +155,7 @@ export default function LegendFilter({
       <p className="mt-2 hidden border-t border-border pt-2 text-meta leading-snug text-subtle md:block">
         {layerMode === "heatmap"
           ? "Heatmap intensity is weighted by RevPAR. Tap a row to filter."
-          : "Tap a row to filter the map. RevPAR = period room revenue ÷ available rooms."}
+          : "Tap a row to filter the map. RevPAR = trailing-12-month (T12) revenue ÷ rooms ÷ 365, per night."}
       </p>
     </div>
   );

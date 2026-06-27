@@ -87,6 +87,8 @@ function CopyIcon() {
       strokeWidth={1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
+      focusable={false}
     >
       <rect x="9" y="9" width="11" height="11" rx="2" />
       <path d="M5 15V5a2 2 0 0 1 2-2h10" />
@@ -104,6 +106,8 @@ function CheckIcon() {
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
+      focusable={false}
     >
       <path d="M5 13l4 4L19 7" />
     </svg>
@@ -120,6 +124,8 @@ function DirectionsIcon() {
       strokeWidth={1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
+      focusable={false}
     >
       <path d="M12 21s7-6.3 7-12a7 7 0 1 0-14 0c0 5.7 7 12 7 12z" />
       <circle cx="12" cy="9" r="2.5" />
@@ -153,6 +159,10 @@ function PropertyCard({
   const [dragY, setDragY] = useState(0);
 
   const SWIPE_DISMISS_PX = 50;
+
+  // Short label for the latest reported month ("May 2026" → "May"), for the
+  // last-month RevPAR / revenue stats.
+  const lastMo = hotel.lastMonth?.split(" ")[0] ?? null;
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
@@ -299,6 +309,8 @@ function PropertyCard({
               strokeWidth={1.5}
               strokeLinecap="round"
               strokeLinejoin="round"
+              aria-hidden="true"
+              focusable={false}
             >
               <rect x="3" y="4" width="18" height="16" rx="2" />
               <circle cx="8.5" cy="9.5" r="1.5" />
@@ -378,13 +390,20 @@ function PropertyCard({
         </p>
 
         <div className="mt-3 flex gap-3 border-t border-border pt-3">
-          <Stat label="RevPAR" value={fmtMoney(hotel.revpar)} />
+          <Stat label="RevPAR · T12" value={fmtMoney(hotel.revpar)} />
+          <Stat
+            label={lastMo ? `RevPAR · ${lastMo}` : "RevPAR · last mo"}
+            value={fmtMoney(hotel.lastMonthRevpar)}
+          />
           <Stat label="ADR" value={fmtMoney(hotel.adr)} />
-          <Stat label="Occupancy" value={pct(hotel.occupancy)} />
         </div>
 
-        <div className="mt-3 border-t border-border pt-3">
-          <Stat label="Revenue (latest mo)" value={fmtMoney(hotel.revenue)} />
+        <div className="mt-3 flex gap-3 border-t border-border pt-3">
+          <Stat label="Occupancy" value={pct(hotel.occupancy)} />
+          <Stat
+            label={lastMo ? `Revenue · ${lastMo}` : "Revenue (latest mo)"}
+            value={fmtMoney(hotel.revenue)}
+          />
         </div>
 
         <RevparTrend
@@ -464,7 +483,7 @@ function PropertyCard({
             rel="noopener noreferrer"
             className="transition-base mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border hover:-translate-y-px hover:bg-[hsl(var(--surface-muted))]"
           >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable={false}>
               <circle cx="12" cy="5" r="2.4" />
               <path d="M12 7.5c-2 0-3 1.2-3 3v3h1.5l.5 6h2l.5-6H15v-3c0-1.8-1-3-3-3z" />
             </svg>

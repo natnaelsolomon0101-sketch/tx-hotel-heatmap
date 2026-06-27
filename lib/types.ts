@@ -2,8 +2,9 @@ export type Bucket = "red" | "yellow" | "gray";
 
 /**
  * One point on a hotel's 2023→present RevPAR trend (see scripts/build-history.mjs).
- * `revpar` is an average-month RevPAR on the same basis as the map's RevPAR, so
- * the latest point lines up with `HotelProperties.revpar`.
+ * `revpar` is a per-night RevPAR for that period (period revenue / rooms /
+ * days-in-period), so every point — quarter, year, or partial — is comparable
+ * and on the same nightly basis as the map's T12 RevPAR.
  */
 export interface TrendPoint {
   q: string; // "2023" | "2024Q2" … "2026Q2"
@@ -21,10 +22,12 @@ export interface HotelProperties {
   state: string;
   zip: string;
   rooms: number | null;
-  revpar: number | null;
+  revpar: number | null; // T12 RevPAR ($/night): trailing-12mo revenue / rooms / 365
+  lastMonthRevpar: number | null; // latest month's revenue / rooms / days-in-month
+  lastMonth: string | null; // label for the latest reported month, e.g. "May 2026"
   adr: number | null;
   occupancy: number | null; // 0–1 fraction when known
-  revenue: number | null;
+  revenue: number | null; // latest reported month's room revenue ($)
   bucket: Bucket;
   photo: string | null;
   flagged: boolean; // true when key inputs were missing
@@ -37,8 +40,11 @@ export interface HotelProperties {
  */
 export interface HotelHistory {
   history: TrendPoint[];
-  t12Revenue: number | null;
-  t12Revpar: number | null;
+  t12Revenue: number | null; // trailing-12mo revenue (last 4 complete quarters)
+  t12Revpar: number | null; // T12 RevPAR ($/night): t12Revenue / rooms / 365
+  lastMonthRevenue: number | null; // latest reported month's room revenue ($)
+  lastMonthRevpar: number | null; // latest month's revenue / rooms / days-in-month
+  lastMonth: string | null; // label for the latest reported month, e.g. "May 2026"
 }
 
 export type HotelFeature = GeoJSON.Feature<GeoJSON.Point, HotelProperties>;
