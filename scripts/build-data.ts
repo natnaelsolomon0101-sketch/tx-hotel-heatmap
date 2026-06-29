@@ -50,6 +50,12 @@ const CONFIG = {
   // (-> gray, sinks to the bottom of the list) rather than removed.
   excludeNamePattern: /^\s*(city|county|town|village|state)\s+of\b/i,
   minRooms: 2, // 1-room filings are placeholders, not real room counts
+
+  // The site only shows real hotels, defined as MORE THAN this many rooms.
+  // The Comptroller file is mostly sub-scale filers (vacation rentals, single
+  // condos, RV sites, B&Bs) — dropping <= this count removes ~half the rows
+  // while keeping essentially every branded/real hotel.
+  dropAtOrUnderRooms: 10,
   maxRevpar: 2000, // per-night RevPAR ceiling ($/room/night) — rejects data errors
 
 
@@ -521,6 +527,19 @@ async function main() {
   hotels = hotels.filter(
     (h) => h.name && h.address && !CONFIG.excludeNamePattern.test(h.name)
   );
+
+  // Keep only real hotels: more than dropAtOrUnderRooms rooms. Strips the
+  // thousands of vacation-rental / single-condo / RV-site filings that aren't
+  // hotels. A null room count is treated as sub-scale and dropped.
+  {
+    const before = hotels.length;
+    hotels = hotels.filter(
+      (h) => h.rooms != null && h.rooms > CONFIG.dropAtOrUnderRooms
+    );
+    console.log(
+      `  room filter (> ${CONFIG.dropAtOrUnderRooms} rooms): kept ${hotels.length.toLocaleString()} of ${before.toLocaleString()}`
+    );
+  }
 
   // Dedupe by location, keeping the highest-revenue filing.
   const byLoc = new Map<string, Hotel>();
