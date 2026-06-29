@@ -5,7 +5,12 @@ import { HotelFeature } from "./types";
  * Maps brand name to a canonical brand key.
  */
 const BRAND_PATTERNS: Record<string, RegExp[]> = {
-  hilton: [/hilton(?:express)?/i, /doubletree/i, /hampton/i, /homewood/i],
+  hilton: [
+    /hilton(?:\s+express)?/i, /doubletree/i, /hampton/i, /homewood/i, /embassy\s+suites/i,
+    /home2/i, /\bcanopy\b/i, /spark\s+by/i, /tru\s+by\s+hilton/i, /tapestry\s+collection/i,
+    /\bcurio\b/i, /waldorf\s+astoria/i, /conrad\s+(?:hotel|by|san|austin|dallas|houston)/i,
+    /\bmotto\s+by/i, /\bsignia\b/i, /tempo\s+by/i,
+  ],
   marriott: [
     // Legacy luxury/premium brands
     /marriott/i, /ritz[- ]carlton/i, /st\.?\s+regis/i, /\bw\s+hotel/i, /sheraton/i, /westin/i,
@@ -14,12 +19,28 @@ const BRAND_PATTERNS: Record<string, RegExp[]> = {
     /\baloft/i, /\belement\b/i, /renaissance/i, /\bmoxy/i, /four\s+points/i, /le\s+m[eé]ridien/i,
     /autograph/i, /tribute/i, /delta\s+hotel/i, /gaylord/i, /\bedition\b/i, /jw\s+marriott/i,
   ],
-  ihg: [/holiday\s+inn/i, /express\s+by/i, /voco/i, /indigo/i, /candlewood/i],
-  wyndham: [/wyndham/i, /la\s+quinta/i, /days\s+inn/i, /super\s+8/i, /ramada/i, /travelodge/i],
-  choice: [/choice\s+hotel/i, /comfort\s+inn/i, /comfort\s+suites/i, /quality\s+inn/i, /clarion/i, /econo\s+lodge/i],
-  "best-western": [/best\s+western/i],
-  "motel-6": [/motel\s+6/i, /red\s+roof/i],
-  "extended-stay": [/extended\s+stay/i, /stays/i],
+  ihg: [
+    /holiday\s+inn/i, /express\s+by/i, /\bvoco\b/i, /hotel\s+indigo/i, /candlewood/i,
+    /crowne\s+plaza/i, /staybridge/i, /avid\s+hotel/i, /kimpton/i, /even\s+hotel/i,
+    /intercontinental/i,
+  ],
+  wyndham: [
+    /wyndham/i, /la\s+quinta/i, /days\s+inn/i, /super\s+8/i, /ramada/i, /travelodge/i,
+    /microtel/i, /baymont/i, /howard\s+johnson/i, /wingate/i, /hawthorn\s+suites/i,
+    /echo\s+suites/i, /knights\s+inn/i, /americinn/i, /\btryp\b/i,
+  ],
+  choice: [
+    /choice\s+hotel/i, /comfort\s+inn/i, /comfort\s+suites/i, /comfort\s+hotel/i,
+    /quality\s+inn/i, /quality\s+suites/i, /quality\s+hotel/i, /clarion/i, /econo\s+lodge/i,
+    /sleep\s+inn/i, /main\s?stay/i, /suburban\s+studios/i, /cambria/i, /wood\s?spring/i,
+    /everhome/i, /rodeway/i, /\bascend\b/i,
+  ],
+  "best-western": [/best\s+western/i, /surestay/i, /glo\s+by/i, /\bsadie\b/i, /\baiden\s+by/i],
+  "motel-6": [/motel\s+6/i, /red\s+roof/i, /studio\s+6/i],
+  "extended-stay": [
+    /extended\s+stay/i, /intown\s+suites/i, /siegel\s+suites/i, /crossland/i,
+    /sonesta\s+es/i, /hometowne\s+studios/i, /value\s+place/i,
+  ],
   independent: [/independent/i],
 };
 
