@@ -6,7 +6,14 @@ import { HotelFeature } from "./types";
  */
 const BRAND_PATTERNS: Record<string, RegExp[]> = {
   hilton: [/hilton(?:express)?/i, /doubletree/i, /hampton/i, /homewood/i],
-  marriott: [/marriott/i, /ritz-carlton/i, /st\. regis/i, /w\s+hotel/i, /sheraton/i, /westin/i],
+  marriott: [
+    // Legacy luxury/premium brands
+    /marriott/i, /ritz[- ]carlton/i, /st\.?\s+regis/i, /\bw\s+hotel/i, /sheraton/i, /westin/i,
+    // Select-service & extended-stay brands (Courtyard, Fairfield, Residence Inn, etc.)
+    /courtyard/i, /fairfield/i, /residence\s+inn/i, /springhill/i, /towneplace/i, /\bac\s+hotel/i,
+    /\baloft/i, /\belement\b/i, /renaissance/i, /\bmoxy/i, /four\s+points/i, /le\s+m[eé]ridien/i,
+    /autograph/i, /tribute/i, /delta\s+hotel/i, /gaylord/i, /\bedition\b/i, /jw\s+marriott/i,
+  ],
   ihg: [/holiday\s+inn/i, /express\s+by/i, /voco/i, /indigo/i, /candlewood/i],
   wyndham: [/wyndham/i, /la\s+quinta/i, /days\s+inn/i, /super\s+8/i, /ramada/i, /travelodge/i],
   choice: [/choice\s+hotel/i, /comfort\s+inn/i, /comfort\s+suites/i, /quality\s+inn/i, /clarion/i, /econo\s+lodge/i],
