@@ -21,5 +21,10 @@ export function int(n: number): string {
 
 /** Title-case each word: "hilton DALLAS" → "Hilton Dallas". */
 export function titleCase(s: string): string {
-  return s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
+  // Capitalize the first letter of every alphanumeric run, treating spaces,
+  // hyphens and slashes as boundaries ("SUITES-AUSTIN/AIRPORT" ->
+  // "Suites-Austin/Airport"), but not apostrophes ("WENDY'S" -> "Wendy's").
+  return s
+    .toLowerCase()
+    .replace(/(^|[^a-z0-9'])([a-z0-9])/g, (_, sep, ch) => sep + ch.toUpperCase());
 }
