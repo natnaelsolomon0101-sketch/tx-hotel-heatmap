@@ -130,7 +130,7 @@ export default function HeaderBar({
         </div>
       </div>
 
-      <div className="flex min-w-0 items-center gap-4 md:gap-6">
+      <div className="flex min-w-0 shrink-0 items-center gap-2.5 sm:gap-4 md:gap-6">
         <Stat label="Hotels" value={stats.total.toLocaleString()} />
         <Stat label="Avg RevPAR" value={fmtMoney(stats.avgRevpar)} />
         <Stat
