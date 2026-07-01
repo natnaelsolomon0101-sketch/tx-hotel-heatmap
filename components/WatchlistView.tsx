@@ -44,13 +44,13 @@ function WatchlistView({
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface/95 shadow-md ring-1 ring-border backdrop-blur">
+    <div className="flex min-h-0 flex-1 flex-col rounded-lg bg-surface shadow-sm ring-1 ring-border backdrop-blur">
       <div className="border-b border-border p-3">
         <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-subtle">
+          <h2 className="label-overline">
             Saved
           </h2>
-          <span className="text-[11px] tabular-nums text-subtle">
+          <span className="text-meta font-mono tabular-nums text-subtle">
             {int(saved.length)} saved
           </span>
         </div>
@@ -60,7 +60,7 @@ function WatchlistView({
             onClick={exportWatchlist}
             disabled={saved.length === 0}
             title="Export watchlist to CSV"
-            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
+            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-border px-2 py-1 text-meta font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
           >
             <DownloadIcon />
             Export watchlist CSV
@@ -70,7 +70,7 @@ function WatchlistView({
             onClick={onClear}
             disabled={saved.length === 0}
             title="Remove all saved properties"
-            className="shrink-0 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
+            className="shrink-0 rounded-lg border border-border px-2 py-1 text-meta font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
           >
             Clear all
           </button>
@@ -108,16 +108,16 @@ function WatchlistView({
                         <span className="block truncate text-sm font-medium text-foreground">
                           {titleCase(p.name)}
                         </span>
-                        <span className="block truncate text-[11px] text-muted-foreground">
+                        <span className="block truncate text-meta text-muted-foreground">
                           {titleCase(p.city)}, {p.state}
                           {p.rooms != null ? ` · ${p.rooms} rms` : ""}
                         </span>
                       </span>
                       <span className="shrink-0 text-right">
-                        <span className="block text-sm font-semibold tabular-nums text-foreground">
+                        <span className="block text-data-sm text-foreground">
                           {money(p.revpar)}
                         </span>
-                        <span className="block text-[10px] uppercase tracking-wide text-subtle">
+                        <span className="block label-overline text-[9px]">
                           RevPAR
                         </span>
                       </span>

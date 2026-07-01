@@ -1,5 +1,6 @@
 import { Bucket, HotelFeature } from "./types";
 import { median as medianOrNull } from "@/lib/stats";
+import { titleCase } from "@/lib/format";
 
 /** A generic area-level rollup row (city, ZIP, or any other key). */
 export interface RollupRow {
@@ -29,9 +30,6 @@ export const MIN_MARKET_SIZE = 15;
 // ZIPs are far more granular than cities, so a lower floor keeps useful
 // submarkets visible without flooding the list with one-off properties.
 export const MIN_ZIP_SIZE = 5;
-
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
 /** Sentinel key for features whose grouping value is blank. Rows with this key
  *  are excluded from the ranking via the minSize gate (their `count` is reported

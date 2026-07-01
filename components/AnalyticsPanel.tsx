@@ -48,8 +48,8 @@ const RevparHistogram = memo(function RevparHistogram({
   median: number | null;
 }) {
   const bins = useMemo(() => histogram(values), [values]);
-  const maxCount = Math.max(1, ...bins.map((b) => b.count));
 
+  // Pure layout constants — independent of data, safe to compute every render.
   const W = 300;
   const H = 120;
   const padL = 4;
@@ -58,17 +58,23 @@ const RevparHistogram = memo(function RevparHistogram({
   const padBot = 18;
   const plotW = W - padL - padR;
   const plotH = H - padTop - padBot;
-  const n = bins.length;
-  const slot = plotW / n;
-  const barW = slot * 0.72;
-  const ticks = niceTicks(maxCount, 3);
 
-  let medianX: number | null = null;
-  if (median != null) {
-    let idx = bins.findIndex((b) => median < b.x1);
-    if (idx < 0) idx = bins.length - 1;
-    medianX = padL + idx * slot + slot / 2;
-  }
+  // Derived geometry depends only on bins + median — cache it.
+  const { maxCount, ticks, slot, barW, medianX } = useMemo(() => {
+    const maxCount = Math.max(1, ...bins.map((b) => b.count));
+    const ticks = niceTicks(maxCount, 3);
+    const slot = plotW / bins.length;
+    const barW = slot * 0.72;
+
+    let medianX: number | null = null;
+    if (median != null) {
+      let idx = bins.findIndex((b) => median < b.x1);
+      if (idx < 0) idx = bins.length - 1;
+      medianX = padL + idx * slot + slot / 2;
+    }
+
+    return { maxCount, ticks, slot, barW, medianX };
+  }, [bins, median]);
 
   return (
     <svg
@@ -263,14 +269,6 @@ const ScatterPlot = memo(function ScatterPlot({
   points: ScatterPoint[];
   onSelectHotel?: (feature: HotelFeature) => void;
 }) {
-  if (points.length === 0) {
-    return (
-      <p className="text-[11px] leading-snug text-subtle">
-        No hotels with both rooms and RevPAR data.
-      </p>
-    );
-  }
-
   const W = 300;
   const H = 140;
   const padL = 28;
@@ -280,10 +278,36 @@ const ScatterPlot = memo(function ScatterPlot({
   const plotW = W - padL - padR;
   const plotH = H - padTop - padBot;
 
-  const minLogRooms = Math.log10(Math.max(1, Math.min(...points.map((p) => p.rooms))));
-  const maxLogRooms = Math.log10(Math.max(...points.map((p) => p.rooms)));
-  const minRevpar = Math.min(...points.map((p) => p.revpar));
-  const maxRevpar = Math.max(...points.map((p) => p.revpar));
+  // Data-dependent bounds + ticks — cache them. Tolerates an empty array so
+  // the hook can run unconditionally (the empty guard returns afterward).
+  const { minLogRooms, maxLogRooms, minRevpar, maxRevpar, yTicks } =
+    useMemo(() => {
+      if (points.length === 0) {
+        return {
+          minLogRooms: 0,
+          maxLogRooms: 0,
+          minRevpar: 0,
+          maxRevpar: 0,
+          yTicks: [] as number[],
+          yTickStep: 0,
+        };
+      }
+      const minLogRooms = Math.log10(Math.max(1, Math.min(...points.map((p) => p.rooms))));
+      const maxLogRooms = Math.log10(Math.max(...points.map((p) => p.rooms)));
+      const minRevpar = Math.min(...points.map((p) => p.revpar));
+      const maxRevpar = Math.max(...points.map((p) => p.revpar));
+      const yTicks = niceTicks(maxRevpar, 3);
+      const yTickStep = yTicks.length > 1 ? yTicks[1] - yTicks[0] : maxRevpar / 3;
+      return { minLogRooms, maxLogRooms, minRevpar, maxRevpar, yTicks, yTickStep };
+    }, [points]);
+
+  if (points.length === 0) {
+    return (
+      <p className="text-[11px] leading-snug text-subtle">
+        No hotels with both rooms and RevPAR data.
+      </p>
+    );
+  }
 
   const scaleX = (rooms: number) =>
     padL +
@@ -291,9 +315,6 @@ const ScatterPlot = memo(function ScatterPlot({
       plotW;
   const scaleY = (revpar: number) =>
     padTop + plotH - ((revpar - minRevpar) / (maxRevpar - minRevpar)) * plotH;
-
-  const yTicks = niceTicks(maxRevpar, 3);
-  const yTickStep = yTicks.length > 1 ? yTicks[1] - yTicks[0] : maxRevpar / 3;
 
   return (
     <svg

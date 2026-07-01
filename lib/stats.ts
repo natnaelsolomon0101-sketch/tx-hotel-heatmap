@@ -1,4 +1,5 @@
 import { Bucket, HotelFeature } from "./types";
+import { titleCase } from "@/lib/format";
 
 export interface PortfolioStats {
   total: number;
@@ -62,9 +63,6 @@ export function computeStats(features: HotelFeature[]): PortfolioStats {
     buckets,
   };
 }
-
-const titleCase = (s: string) =>
-  s.replace(/\w\S*/g, (t) => t[0].toUpperCase() + t.slice(1).toLowerCase());
 
 // Cached at module scope so we build the formatter once instead of on every
 // fmtMoney call (mirrors the USD0 pattern in lib/format.ts).

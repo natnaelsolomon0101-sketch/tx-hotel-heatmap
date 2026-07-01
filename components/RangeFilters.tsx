@@ -1,5 +1,7 @@
 "use client";
 
+import { memo } from "react";
+
 import { fmtMoney } from "@/lib/stats";
 
 export type Range = [number, number];
@@ -159,7 +161,7 @@ function DualRange({
   );
 }
 
-export default function RangeFilters({
+function RangeFilters({
   revparMin,
   revparMax,
   revpar,
@@ -230,3 +232,5 @@ export default function RangeFilters({
     </div>
   );
 }
+
+export default memo(RangeFilters);

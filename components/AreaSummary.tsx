@@ -4,6 +4,7 @@ import { memo, useMemo } from "react";
 import { BUCKET_COLORS, BUCKET_LABELS, Bucket, HotelFeature } from "@/lib/types";
 import { computeStats, fmtMoney } from "@/lib/stats";
 import { titleCase } from "@/lib/format";
+import EmptyState from "@/components/EmptyState";
 
 type AreaSummaryProps = {
   /** Human label for the drawn area, e.g. "Drawn area" or "3 mi radius". */
@@ -45,55 +46,55 @@ function AreaSummary({
     stats.buckets.red + stats.buckets.yellow + stats.buckets.gray || 1;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-white/95 shadow-card ring-1 ring-black/5 backdrop-blur">
-      <div className="border-b border-gray-100 p-3">
+    <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-surface/95 shadow-card ring-1 ring-border backdrop-blur">
+      <div className="border-b border-border p-3">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {label}
           </h2>
           <button
             type="button"
             onClick={onClear}
-            className="shrink-0 text-[11px] font-medium text-gray-500 hover:text-gray-900"
+            className="shrink-0 text-[11px] font-medium text-muted-foreground hover:text-foreground"
           >
             Clear
           </button>
         </div>
         {detail && (
-          <p className="mt-1 truncate text-[11px] tabular-nums text-gray-400">
+          <p className="mt-1 truncate text-[11px] tabular-nums text-subtle">
             {detail}
           </p>
         )}
       </div>
 
       {total === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-          <p className="text-sm font-medium text-gray-700">No hotels inside</p>
-          <p className="text-[11px] leading-snug text-gray-400">
-            Draw over a denser area, or adjust your filters.
-          </p>
+        <div className="flex flex-1 items-center justify-center">
+          <EmptyState
+            title="No hotels inside"
+            message="Draw over a denser area, or loosen your filters."
+          />
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-px border-b border-gray-100 bg-gray-100">
+          <div className="grid grid-cols-3 gap-px border-b border-border bg-muted">
             <Metric label="Hotels" value={total.toLocaleString()} />
             <Metric label="Avg RevPAR" value={fmtMoney(stats.avgRevpar)} />
             <Metric label="Median" value={fmtMoney(stats.medianRevpar)} />
           </div>
 
-          <div className="border-b border-gray-100 p-3">
+          <div className="border-b border-border p-3">
             <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-subtle">
                 RevPAR mix
               </span>
-              <span className="text-[11px] tabular-nums text-gray-400">
+              <span className="text-[11px] tabular-nums text-subtle">
                 {stats.withRevpar.toLocaleString()} with data
               </span>
             </div>
             <span
               role="img"
               aria-label={`RevPAR mix: ${stats.buckets.red.toLocaleString()} high, ${stats.buckets.yellow.toLocaleString()} mid, ${stats.buckets.gray.toLocaleString()} low or no data`}
-              className="flex h-1.5 w-full overflow-hidden rounded-full bg-gray-100"
+              className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted"
             >
               {ALL_BUCKETS.map((b) =>
                 stats.buckets[b] > 0 ? (
@@ -112,7 +113,7 @@ function AreaSummary({
               {ALL_BUCKETS.map((b) => (
                 <span
                   key={b}
-                  className="flex items-center gap-1 text-[11px] tabular-nums text-gray-500"
+                  className="flex items-center gap-1 text-[11px] tabular-nums text-muted-foreground"
                   title={BUCKET_LABELS[b]}
                 >
                   <span
@@ -127,15 +128,15 @@ function AreaSummary({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="px-3 pt-2 text-[10px] font-medium uppercase tracking-wide text-gray-400">
+            <div className="px-3 pt-2 text-[10px] font-medium uppercase tracking-wide text-subtle">
               Top by RevPAR
             </div>
             {top.length === 0 ? (
-              <p className="px-3 py-3 text-[11px] text-gray-400">
+              <p className="px-3 py-3 text-[11px] text-subtle">
                 No RevPAR data for hotels in this area.
               </p>
             ) : (
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-border">
                 {top.map((f, i) => {
                   const p = f.properties;
                   return (
@@ -145,19 +146,19 @@ function AreaSummary({
                     >
                       <span
                         aria-hidden="true"
-                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-surface"
                         style={{ backgroundColor: BUCKET_COLORS[p.bucket] }}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-gray-800">
+                        <span className="block truncate text-sm font-medium text-foreground">
                           {titleCase(p.name)}
                         </span>
-                        <span className="block truncate text-[11px] text-gray-500">
+                        <span className="block truncate text-[11px] text-muted-foreground">
                           {titleCase(p.city)}, {p.state}
                           {p.rooms != null ? ` · ${p.rooms} rms` : ""}
                         </span>
                       </span>
-                      <span className="shrink-0 text-sm font-semibold tabular-nums text-gray-900">
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                         {fmtMoney(p.revpar)}
                       </span>
                     </li>
@@ -169,13 +170,13 @@ function AreaSummary({
         </>
       )}
 
-      <div className="flex gap-2 border-t border-gray-100 p-3">
+      <div className="flex gap-2 border-t border-border p-3">
         <button
           type="button"
           onClick={onExport}
           disabled={total === 0}
           title="Export hotels in this area to CSV"
-          className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-border px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-muted disabled:opacity-40"
         >
           <svg
             aria-hidden="true"
@@ -194,7 +195,7 @@ function AreaSummary({
         <button
           type="button"
           onClick={onClear}
-          className="flex-1 rounded-lg bg-gray-900 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-gray-700"
+          className="flex-1 rounded-lg bg-ink px-2 py-1.5 text-[11px] font-medium text-white hover:bg-ink-hover"
         >
           Clear area
         </button>
@@ -205,11 +206,11 @@ function AreaSummary({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5 bg-white px-3 py-2.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+    <div className="flex flex-col gap-0.5 bg-surface px-3 py-2.5">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-subtle">
         {label}
       </span>
-      <span className="text-sm font-semibold tabular-nums text-gray-900">
+      <span className="text-sm font-semibold tabular-nums text-foreground">
         {value}
       </span>
     </div>

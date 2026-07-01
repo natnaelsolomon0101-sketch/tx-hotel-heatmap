@@ -1,4 +1,4 @@
-import { HotelFeature } from "./types";
+import { HotelFeature, HotelProperties } from "./types";
 
 /**
  * Hotel brand families recognized from name patterns.
@@ -18,6 +18,10 @@ const BRAND_PATTERNS: Record<string, RegExp[]> = {
     /courtyard/i, /fairfield/i, /residence\s+inn/i, /springhill/i, /towneplace/i, /\bac\s+hotel/i,
     /\baloft/i, /\belement\b/i, /renaissance/i, /\bmoxy/i, /four\s+points/i, /le\s+m[eé]ridien/i,
     /autograph/i, /tribute/i, /delta\s+hotel/i, /gaylord/i, /\bedition\b/i, /jw\s+marriott/i,
+  ],
+  hyatt: [
+    /hyatt/i, /andaz/i, /thompson\s+hotel/i, /caption\s+by/i, /\balila\b/i,
+    /\bmiraval\b/i, /\bdestination\b/i, /grand\s+hyatt/i, /park\s+hyatt/i,
   ],
   ihg: [
     /holiday\s+inn/i, /express\s+by/i, /\bvoco\b/i, /hotel\s+indigo/i, /candlewood/i,
@@ -49,6 +53,7 @@ export type BrandKey = keyof typeof BRAND_PATTERNS | "other";
 export const BRAND_LABELS: Record<BrandKey, string> = {
   hilton: "Hilton",
   marriott: "Marriott",
+  hyatt: "Hyatt",
   ihg: "IHG (Holiday Inn)",
   wyndham: "Wyndham",
   choice: "Choice (Comfort/Quality)",
@@ -73,6 +78,17 @@ export function detectBrand(name: string): BrandKey {
 }
 
 /**
+ * Detect a hotel's brand family from its properties. Prefers the authoritative
+ * `brand` field from the STR enrichment (e.g. "Hampton by Hilton") when present,
+ * falling back to name-pattern matching for hotels without enrichment.
+ */
+export function detectBrandFor(
+  p: Pick<HotelProperties, "name" | "brand">
+): BrandKey {
+  return detectBrand(p.brand || p.name);
+}
+
+/**
  * Count hotels by brand across a set of features.
  * Returns a map of brand key → count.
  */
@@ -82,6 +98,7 @@ export function countBrands(
   const counts: Record<BrandKey, number> = {
     hilton: 0,
     marriott: 0,
+    hyatt: 0,
     ihg: 0,
     wyndham: 0,
     choice: 0,
@@ -92,8 +109,7 @@ export function countBrands(
     other: 0,
   };
   for (const f of features) {
-    const brand = detectBrand(f.properties.name);
-    counts[brand]++;
+    counts[detectBrandFor(f.properties)]++;
   }
   return counts;
 }

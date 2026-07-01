@@ -81,6 +81,9 @@ const PropertyRow = memo(function PropertyRow({
 }: RowProps) {
   const p = feature.properties;
   const k = featureKey(feature);
+  // Compset enrichment — present on branded-STR hotels only; rows without it
+  // render the standard name/city line with no empty badges.
+  const hotelClass = p.hotelClass || p.scale || null;
   return (
     <div
       className={`flex w-full items-center gap-2.5 px-3 py-2 transition-base ${
@@ -107,6 +110,20 @@ const PropertyRow = memo(function PropertyRow({
             {titleCase(p.city)}, {p.state}
             {p.rooms != null ? ` · ${p.rooms} rms` : ""}
           </span>
+          {(hotelClass || p.brand) && (
+            <span className="mt-1 flex items-center gap-1.5 overflow-hidden">
+              {hotelClass && (
+                <span className="shrink-0 rounded bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                  {hotelClass}
+                </span>
+              )}
+              {p.brand && (
+                <span className="truncate text-[10px] text-subtle">
+                  {p.brand}
+                </span>
+              )}
+            </span>
+          )}
         </span>
         {pct != null && (
           <span

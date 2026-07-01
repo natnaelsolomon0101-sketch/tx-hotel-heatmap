@@ -32,6 +32,49 @@ export interface HotelProperties {
   photo: string | null;
   flagged: boolean; // true when key inputs were missing
   id?: number; // stable index; joins to public/hotel-history.json
+  // Compset enrichment from the branded-STR source (scripts/enrich-hotels.mjs).
+  // All optional so pre-enrichment features keep type-checking.
+  brand?: string | null;
+  parentCompany?: string | null;
+  market?: string | null;
+  submarket?: string | null;
+  hotelClass?: string | null;
+  scale?: string | null;
+  ownerName?: string | null;
+  ownerContact?: string | null;
+  ownerPhone?: string | null;
+  yearBuilt?: number | null;
+  source?: "comptroller" | "str";
+}
+
+/** One peer hotel in a subject's competitive set (see lib/compset.ts). */
+export interface CompsetPeer {
+  id: number;
+  name: string;
+  revpar: number | null;
+  adr: number | null;
+  occupancy: number | null;
+  rooms: number | null;
+  distanceMi?: number | null;
+}
+
+/** Computed competitive set for a subject hotel. */
+export interface CompsetResult {
+  subjectId: number;
+  basis: "submarket-scale" | "radius-tier";
+  submarket?: string | null;
+  scale?: string | null;
+  hotelClass?: string | null;
+  radiusMi?: number | null;
+  peers: CompsetPeer[];
+  count: number;
+  subjectRevpar: number | null;
+  avgRevpar: number | null;
+  medianRevpar: number | null;
+  avgAdr: number | null;
+  avgOccupancy: number | null;
+  rank: number | null;
+  percentile: number | null;
 }
 
 /**

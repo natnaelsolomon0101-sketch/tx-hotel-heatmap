@@ -23,6 +23,8 @@ export default function BriefButton() {
         strokeWidth={1.8}
         strokeLinecap="round"
         strokeLinejoin="round"
+        aria-hidden="true"
+        focusable={false}
       >
         <path d="M6 9V3h12v6" />
         <path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />

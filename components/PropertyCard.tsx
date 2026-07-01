@@ -28,6 +28,8 @@ type PropertyCardProps = {
   compareFull?: boolean;
   /** Toggle this hotel's compare-tray membership; enables the Compare button. */
   onToggleCompare?: () => void;
+  /** Open this hotel's competitive set; enables the "View competitive set" button. */
+  onViewCompset?: () => void;
   /**
    * Render as a full-width bottom sheet with a drag handle + swipe-to-dismiss
    * (touchscreen layout). When false/unset, renders the desktop floating
@@ -144,6 +146,7 @@ function PropertyCard({
   inCompare,
   compareFull,
   onToggleCompare,
+  onViewCompset,
   isMobile = false,
 }: PropertyCardProps) {
   // Which copy action last fired, so we can show targeted "Copied" feedback and
@@ -163,6 +166,12 @@ function PropertyCard({
   // Short label for the latest reported month ("May 2026" → "May"), for the
   // last-month RevPAR / revenue stats.
   const lastMo = hotel.lastMonth?.split(" ")[0] ?? null;
+
+  // Compset enrichment (present on branded-STR hotels only). Rendered
+  // conditionally so unenriched properties never show empty badges/rows.
+  const hotelClass = hotel.hotelClass || hotel.scale || null;
+  const location = [hotel.submarket, hotel.market].filter(Boolean).join(" · ");
+  const hasDetails = Boolean(hotel.ownerName || location);
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
@@ -367,7 +376,7 @@ function PropertyCard({
           {hotel.zip}
         </p>
 
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <span
             className={`text-meta inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono font-semibold ${BUCKET_TIER[hotel.bucket].soft} ${BUCKET_TIER[hotel.bucket].solid}`}
           >
@@ -382,12 +391,43 @@ function PropertyCard({
             />
             {BUCKET_LABELS[hotel.bucket]}
           </span>
+          {hotel.brand && (
+            <span className="text-meta max-w-[11rem] truncate rounded-full bg-muted px-2 py-0.5 font-medium text-foreground ring-1 ring-border">
+              {hotel.brand}
+            </span>
+          )}
+          {hotelClass && (
+            <span className="text-meta rounded-full bg-[hsl(var(--accent)/0.10)] px-2 py-0.5 font-medium text-accent ring-1 ring-[hsl(var(--accent)/0.25)]">
+              {hotelClass}
+            </span>
+          )}
         </div>
 
         <p className="text-meta mt-1.5 font-medium text-muted-foreground">
           {hotel.rooms != null ? `${hotel.rooms} Rooms` : "Rooms n/a"} ·
           Hospitality
         </p>
+
+        {hasDetails && (
+          <dl className="mt-2.5 space-y-1 rounded-lg bg-muted px-2.5 py-2 ring-1 ring-border">
+            {hotel.ownerName && (
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="label-overline shrink-0">Owner</dt>
+                <dd className="min-w-0 truncate text-meta font-medium text-foreground">
+                  {hotel.ownerName}
+                </dd>
+              </div>
+            )}
+            {location && (
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="label-overline shrink-0">Submarket</dt>
+                <dd className="min-w-0 truncate text-meta text-muted-foreground">
+                  {location}
+                </dd>
+              </div>
+            )}
+          </dl>
+        )}
 
         <div className="mt-3 flex gap-3 border-t border-border pt-3">
           <Stat label="RevPAR · T12" value={fmtMoney(hotel.revpar)} />
@@ -489,6 +529,31 @@ function PropertyCard({
             </svg>
             Street View
           </a>
+        )}
+
+        {onViewCompset && (
+          <button
+            type="button"
+            onClick={onViewCompset}
+            title="View this hotel's competitive set"
+            className="transition-base mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[hsl(var(--accent)/0.10)] px-3 py-2 text-xs font-medium text-accent ring-1 ring-[hsl(var(--accent)/0.30)] hover:-translate-y-px"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              focusable={false}
+            >
+              <circle cx="12" cy="12" r="3" />
+              <circle cx="12" cy="12" r="8" />
+            </svg>
+            View competitive set
+          </button>
         )}
 
         {onToggleCompare && (

@@ -28,6 +28,8 @@ function ShareIcon() {
       strokeWidth={1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
+      focusable={false}
     >
       <circle cx="18" cy="5" r="2.5" />
       <circle cx="6" cy="12" r="2.5" />
@@ -47,6 +49,8 @@ function CopyIcon() {
       strokeWidth={1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
+      focusable={false}
     >
       <rect x="9" y="9" width="11" height="11" rx="2" />
       <path d="M5 15V5a2 2 0 0 1 2-2h10" />
@@ -64,6 +68,8 @@ function CheckIcon() {
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
+      focusable={false}
     >
       <path d="M5 13l4 4L19 7" />
     </svg>
@@ -211,13 +217,13 @@ export default function ShareButton({
           role="dialog"
           aria-label="Share this view"
           aria-modal="true"
-          className="absolute right-0 top-11 z-50 w-72 rounded-2xl bg-surface p-3 shadow-md ring-1 ring-border"
+          className="absolute right-0 top-11 z-50 w-72 rounded-panel bg-surface p-3 shadow-md ring-1 ring-border"
         >
           <div className="label-overline">
             Share this view
           </div>
 
-          <p className="mt-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground ring-1 ring-border">
+          <p className="mt-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-meta leading-snug text-muted-foreground ring-1 ring-border">
             {summary}
           </p>
 
@@ -248,14 +254,14 @@ export default function ShareButton({
               readOnly
               value={shareUrl}
               onFocus={(e) => e.currentTarget.select()}
-              className="w-full select-all rounded-lg border border-border bg-surface px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              className="w-full select-all rounded-lg border border-border bg-surface px-2.5 py-1.5 font-mono text-meta text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             />
           </label>
 
           {fellBack && (
-            <p className="mt-2 text-[11px] leading-snug text-subtle">
-              Copy didn&apos;t work automatically. The link above is selected for
-              you - press Cmd/Ctrl+C.
+            <p className="mt-2 text-meta leading-snug text-subtle">
+              Copy didn&apos;t work automatically. The link above is selected, so
+              press Cmd or Ctrl + C.
             </p>
           )}
         </div>

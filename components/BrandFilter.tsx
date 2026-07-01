@@ -16,6 +16,7 @@ type BrandFilterProps = {
 const ALL_BRANDS: BrandKey[] = [
   "hilton",
   "marriott",
+  "hyatt",
   "ihg",
   "wyndham",
   "choice",

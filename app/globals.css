@@ -173,6 +173,17 @@ body {
   box-shadow: 0 0 0 2px hsl(var(--surface)), 0 0 0 4px hsl(var(--ring));
 }
 
+/* Windows High Contrast / forced-colors fallback: forced-colors mode strips
+   box-shadow, so the box-shadow focus ring above goes invisible. Draw a real
+   system-color outline instead so keyboard focus stays visible. */
+@media (forced-colors: active) {
+  *:focus-visible,
+  .skip-link:focus {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
+  }
+}
+
 /* Printable Market Brief: unlock the locked-down screen body so the brief flows
    as a normal page; everything else carries the Tailwind `print:hidden` class. */
 @media print {

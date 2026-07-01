@@ -17,6 +17,8 @@ import {
   HotelCollection,
   HotelHistory,
   HotelFeature,
+  HotelProperties,
+  CompsetResult,
 } from "@/lib/types";
 import ToolRail, { LayerMode } from "./ToolRail";
 import ZoomControls from "./ZoomControls";
@@ -24,8 +26,12 @@ import LegendFilter from "./LegendFilter";
 import PropertyCard from "./PropertyCard";
 import PropertyList, { featureKey, SortKey } from "./PropertyList";
 import HeaderBar from "./HeaderBar";
-import { computeStats } from "@/lib/stats";
-import { buildRevparIndex, getHotelPercentiles } from "@/lib/percentile";
+import { computeStats, median } from "@/lib/stats";
+import {
+  buildRevparIndex,
+  getHotelPercentiles,
+  percentileRank,
+} from "@/lib/percentile";
 const MarketPanel = dynamic(() => import("./MarketPanel"), {
   ssr: false,
   loading: () => (
@@ -63,6 +69,13 @@ const WatchlistView = dynamic(() => import("./WatchlistView"), {
     <div className="min-h-0 flex-1 rounded-2xl bg-surface ring-1 ring-border" />
   ),
 });
+const CompsetPanel = dynamic(() => import("./CompsetPanel"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full rounded-panel bg-surface ring-1 ring-border" />
+  ),
+});
+import { buildCompset } from "@/lib/compset";
 import ShareButton from "./ShareButton";
 import { useWatchlist } from "@/lib/useWatchlist";
 const RollupPanel = dynamic(() => import("./RollupPanel"), {
@@ -83,7 +96,13 @@ import {
   pushRecentSearch,
   MAX_PRESETS,
 } from "@/lib/presets";
-import { BrandKey, detectBrand, countBrands } from "@/lib/brands";
+import { BrandKey, detectBrandFor, countBrands } from "@/lib/brands";
+import SegmentFilter from "./SegmentFilter";
+import {
+  countClasses,
+  countSubmarkets,
+  hotelClassOf,
+} from "@/lib/enrichment";
 import { downloadXls } from "@/lib/xls";
 import {
   LatLng,
@@ -121,6 +140,80 @@ const BUCKET_RGBA: Record<Bucket, [number, number, number, number]> = {
   yellow: [245, 179, 1, 255],
   gray: [154, 160, 166, 230],
 };
+
+// Compset highlight rings drawn over the subject + its peers when a competitive
+// set is open. The subject gets a bold accent ring; peers get a darker outline.
+// Non-compset pins are dimmed (lower alpha) so the set reads as a group.
+const COMPSET_SUBJECT_RING: [number, number, number, number] = [37, 99, 235, 255];
+const COMPSET_PEER_RING: [number, number, number, number] = [17, 24, 39, 235];
+const COMPSET_DIM_ALPHA = 55;
+
+function mean(nums: number[]): number | null {
+  if (nums.length === 0) return null;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+// Recompute the compset's aggregate stats over just the *visible* peers (the
+// full peer list minus any the user has removed), so the averages / rank /
+// percentile stay consistent with what's on screen. The peer list itself is
+// left intact — CompsetPanel renders removed rows struck-through — but `count`
+// reflects the visible set. Mirrors the stat math in lib/compset.ts. When
+// nothing is removed, the base result is returned unchanged.
+function applyRemovedPeers(
+  base: CompsetResult,
+  removed: Set<number>,
+  subject: HotelProperties
+): CompsetResult {
+  if (removed.size === 0) return base;
+  const visible = base.peers.filter((p) => !removed.has(p.id));
+  const subjectRevpar = base.subjectRevpar;
+  const peerRevpars = visible
+    .map((p) => p.revpar)
+    .filter((v): v is number => v != null);
+
+  let avgRevpar: number | null = null;
+  let medianRevpar: number | null = null;
+  let avgAdr: number | null = null;
+  let avgOccupancy: number | null = null;
+  let rank: number | null = null;
+  let percentile: number | null = null;
+
+  if (visible.length > 0) {
+    const revparSet =
+      subjectRevpar != null ? [...peerRevpars, subjectRevpar] : [...peerRevpars];
+    if (revparSet.length > 0) {
+      avgRevpar = mean(revparSet);
+      medianRevpar = median(revparSet);
+    }
+    avgAdr = mean(
+      [...visible.map((p) => p.adr), subject.adr].filter(
+        (v): v is number => v != null
+      )
+    );
+    avgOccupancy = mean(
+      [...visible.map((p) => p.occupancy), subject.occupancy].filter(
+        (v): v is number => v != null
+      )
+    );
+    if (subjectRevpar != null) {
+      rank = peerRevpars.filter((v) => v > subjectRevpar).length + 1;
+      const sorted = [...peerRevpars, subjectRevpar].sort((a, b) => a - b);
+      const pct = percentileRank(subjectRevpar, sorted);
+      percentile = pct == null ? null : Math.max(0, Math.min(1, pct / 100));
+    }
+  }
+
+  return {
+    ...base,
+    count: visible.length,
+    avgRevpar,
+    medianRevpar,
+    avgAdr,
+    avgOccupancy,
+    rank,
+    percentile,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Marker clustering (zoom-aware).
@@ -241,12 +334,24 @@ function MarkersLayer({
   onSelect,
   onHover,
   sizeBy = "constant",
+  compsetActive = false,
+  compsetSubjectId = null,
+  compsetPeerIds,
+  compsetFeatures,
 }: {
   features: HotelFeature[];
   visible: boolean;
   onSelect: (f: HotelFeature) => void;
   onHover?: (info: HoverInfo | null) => void;
   sizeBy?: SizeBy;
+  // Compset highlight: when active, the subject + its (non-removed) peers are
+  // emphasized with rings and every other pin is dimmed. `compsetFeatures`
+  // (subject + visible peers) is filter-independent so peers show even when a
+  // filter would otherwise hide them.
+  compsetActive?: boolean;
+  compsetSubjectId?: number | null;
+  compsetPeerIds?: Set<number>;
+  compsetFeatures?: HotelFeature[];
 }) {
   const map = useMap();
   const overlayRef = useRef<GoogleMapsOverlay | null>(null);
@@ -338,7 +443,16 @@ function MarkersLayer({
         id: "hotels",
         data: singles,
         getPosition: (f) => f.geometry.coordinates as [number, number],
-        getFillColor: (f) => BUCKET_RGBA[f.properties.bucket],
+        getFillColor: (f) => {
+          const base = BUCKET_RGBA[f.properties.bucket];
+          if (!compsetActive) return base;
+          const id = f.properties.id;
+          const inSet =
+            id != null &&
+            (id === compsetSubjectId || (compsetPeerIds?.has(id) ?? false));
+          // Dim everything outside the competitive set so the group stands out.
+          return inSet ? base : [base[0], base[1], base[2], COMPSET_DIM_ALPHA];
+        },
         getRadius: (f) =>
           sizeBy === "constant"
             ? 5
@@ -374,11 +488,53 @@ function MarkersLayer({
           }
         },
         updateTriggers: {
-          getFillColor: singles,
+          getFillColor: [
+            singles,
+            compsetActive,
+            compsetSubjectId,
+            compsetPeerIds,
+          ],
           getRadius: [singles, sizeBy, sizeScale],
         },
       })
     );
+
+    // Compset emphasis: rings drawn over the subject + its visible peers. Drawn
+    // from `compsetFeatures` (independent of the active filters/viewport) so the
+    // whole set is always outlined. Not pickable — clicks fall through to pins.
+    if (compsetActive && compsetFeatures && compsetFeatures.length > 0) {
+      layers.push(
+        new ScatterplotLayer<HotelFeature>({
+          id: "compset-rings",
+          data: compsetFeatures,
+          getPosition: (f) => f.geometry.coordinates as [number, number],
+          getRadius: (f) =>
+            f.properties.id != null && f.properties.id === compsetSubjectId
+              ? 11
+              : 8,
+          radiusUnits: "pixels",
+          radiusMinPixels: 6,
+          radiusMaxPixels: 14,
+          filled: false,
+          stroked: true,
+          lineWidthUnits: "pixels",
+          getLineWidth: (f) =>
+            f.properties.id != null && f.properties.id === compsetSubjectId
+              ? 3
+              : 2,
+          getLineColor: (f) =>
+            f.properties.id != null && f.properties.id === compsetSubjectId
+              ? COMPSET_SUBJECT_RING
+              : COMPSET_PEER_RING,
+          pickable: false,
+          updateTriggers: {
+            getRadius: [compsetFeatures, compsetSubjectId],
+            getLineWidth: [compsetFeatures, compsetSubjectId],
+            getLineColor: [compsetFeatures, compsetSubjectId],
+          },
+        })
+      );
+    }
 
     if (clusters.length > 0) {
       // Area-proportional bubble radius: sqrt(count) so the *area* of the
@@ -475,7 +631,21 @@ function MarkersLayer({
     // `map` is in the deps so this re-runs once the overlay is created (Effect A
     // runs first in the same commit); without it the layer never attaches on
     // first load and pins never paint.
-  }, [map, features, visible, onSelect, onHover, zoom, expandCluster, sizeBy, sizeScale]);
+  }, [
+    map,
+    features,
+    visible,
+    onSelect,
+    onHover,
+    zoom,
+    expandCluster,
+    sizeBy,
+    sizeScale,
+    compsetActive,
+    compsetSubjectId,
+    compsetPeerIds,
+    compsetFeatures,
+  ]);
 
   return null;
 }
@@ -715,6 +885,14 @@ export default function MapView() {
   const [revparRange, setRevparRange] = useState<Range | null>(null);
   const [roomsRange, setRoomsRange] = useState<Range | null>(null);
   const [activeBrands, setActiveBrands] = useState<Set<BrandKey>>(new Set());
+  // Compset-enrichment filters: chain-scale/class tiers (multi-select) and a
+  // single submarket. Both seeded from a shared link on first paint.
+  const [activeClasses, setActiveClasses] = useState<Set<string>>(
+    new Set(initialUrlState.classes ?? [])
+  );
+  const [submarket, setSubmarket] = useState<string | null>(
+    initialUrlState.submarket ?? null
+  );
   // Saved filter views + recent searches (both persisted in localStorage).
   // Initialized synchronously so the menu is populated on first paint.
   const [savedPresets, setSavedPresets] = useState<FilterPreset[]>(() =>
@@ -736,6 +914,13 @@ export default function MapView() {
   });
   const [compare, setCompare] = useState<HotelFeature[]>([]);
   const COMPARE_MAX = 3;
+  // Compset ("competitive set"): the subject hotel's stable id, or null when no
+  // compset is open. `removedPeerIds` are peers the user has dropped from the
+  // set (excluded from stats, shown struck-through in the panel).
+  const [compsetSubjectId, setCompsetSubjectId] = useState<number | null>(null);
+  const [removedPeerIds, setRemovedPeerIds] = useState<Set<number>>(
+    () => new Set()
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ---- Area selection (polygon lasso + radius) -------------------------
@@ -909,15 +1094,30 @@ export default function MapView() {
     if (!data) return [];
     const allBuckets = activeBuckets.size === ALL_BUCKETS.length;
     const brandActive = activeBrands.size > 0;
+    const classActive = activeClasses.size > 0;
+    const smActive = submarket != null;
     const [rpLo, rpHi] = revparVal;
     const [rmLo, rmHi] = roomsVal;
     const rpActive = rpLo > ranges.revpar[0] || rpHi < ranges.revpar[1];
     const rmActive = rmLo > ranges.rooms[0] || rmHi < ranges.rooms[1];
-    if (allBuckets && !brandActive && !rpActive && !rmActive) return data.features;
+    if (
+      allBuckets &&
+      !brandActive &&
+      !rpActive &&
+      !rmActive &&
+      !classActive &&
+      !smActive
+    )
+      return data.features;
     return data.features.filter((f) => {
       const p = f.properties;
       if (!allBuckets && !activeBuckets.has(p.bucket)) return false;
-      if (brandActive && !activeBrands.has(detectBrand(p.name))) return false;
+      if (brandActive && !activeBrands.has(detectBrandFor(p))) return false;
+      if (classActive) {
+        const c = hotelClassOf(p);
+        if (!c || !activeClasses.has(c)) return false;
+      }
+      if (smActive && p.submarket !== submarket) return false;
       if (rpActive) {
         if (p.revpar == null) return false;
         if (p.revpar < rpLo || p.revpar > rpHi) return false;
@@ -928,11 +1128,31 @@ export default function MapView() {
       }
       return true;
     });
-  }, [data, activeBuckets, activeBrands, revparVal, roomsVal, ranges]);
+  }, [
+    data,
+    activeBuckets,
+    activeBrands,
+    activeClasses,
+    submarket,
+    revparVal,
+    roomsVal,
+    ranges,
+  ]);
 
   // Data-driven brand counts (for the brand filter control).
   const brandCounts = useMemo(
     () => countBrands(data?.features ?? []),
+    [data]
+  );
+
+  // Data-driven class/scale + submarket options (compset enrichment). Derived
+  // from the loaded set so the controls only ever offer values that exist.
+  const classOptions = useMemo(
+    () => countClasses(data?.features ?? []),
+    [data]
+  );
+  const submarketOptions = useMemo(
+    () => countSubmarkets(data?.features ?? []),
     [data]
   );
 
@@ -1083,6 +1303,101 @@ export default function MapView() {
 
   const clearCompare = useCallback(() => setCompare([]), []);
 
+  // ---- Compset (competitive set) --------------------------------------
+  // id → feature index for O(1) subject/peer lookups (peers carry only ids).
+  const featuresById = useMemo(() => {
+    const m = new globalThis.Map<number, HotelFeature>();
+    for (const f of data?.features ?? []) {
+      if (f.properties.id != null) m.set(f.properties.id, f);
+    }
+    return m;
+  }, [data]);
+
+  const compsetSubject =
+    compsetSubjectId != null ? featuresById.get(compsetSubjectId) ?? null : null;
+
+  // Canonical compset over the FULL dataset (filters shouldn't shrink a
+  // competitive set). Memoized on the subject + data; removals are layered on
+  // separately so toggling a peer doesn't rebuild the whole set.
+  const compsetBase = useMemo(
+    () =>
+      compsetSubject ? buildCompset(compsetSubject, data?.features ?? []) : null,
+    [compsetSubject, data]
+  );
+
+  // Stats recomputed over the visible (non-removed) peers.
+  const compsetResult = useMemo(
+    () =>
+      compsetBase && compsetSubject
+        ? applyRemovedPeers(compsetBase, removedPeerIds, compsetSubject.properties)
+        : null,
+    [compsetBase, compsetSubject, removedPeerIds]
+  );
+
+  // Visible peer ids (for map dimming) and subject+peer features (for the ring
+  // layer, kept filter-independent so peers always outline).
+  const compsetPeerIds = useMemo(() => {
+    const s = new globalThis.Set<number>();
+    if (compsetBase) {
+      for (const p of compsetBase.peers) {
+        if (!removedPeerIds.has(p.id)) s.add(p.id);
+      }
+    }
+    return s;
+  }, [compsetBase, removedPeerIds]);
+
+  const compsetFeatures = useMemo(() => {
+    if (!compsetSubject || !compsetBase) return [] as HotelFeature[];
+    const arr: HotelFeature[] = [compsetSubject];
+    for (const p of compsetBase.peers) {
+      if (removedPeerIds.has(p.id)) continue;
+      const f = featuresById.get(p.id);
+      if (f) arr.push(f);
+    }
+    return arr;
+  }, [compsetSubject, compsetBase, removedPeerIds, featuresById]);
+
+  const openCompset = useCallback((f: HotelFeature) => {
+    const id = f.properties.id;
+    if (id == null) return; // compset is keyed by stable id
+    setCompsetSubjectId(id);
+    setRemovedPeerIds(new Set());
+    setSelected(f); // keep the subject selected so closing returns to its card
+    const [lng, lat] = f.geometry.coordinates;
+    // Zoom in so clustering disengages and the highlight rings are visible.
+    controls.current?.flyTo(lng, lat);
+  }, []);
+
+  const closeCompset = useCallback(() => {
+    setCompsetSubjectId(null);
+    setRemovedPeerIds(new Set());
+  }, []);
+
+  const toggleCompsetPeer = useCallback((peerId: number) => {
+    setRemovedPeerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(peerId)) next.delete(peerId);
+      else next.add(peerId);
+      return next;
+    });
+  }, []);
+
+  // Pan to a peer without changing the selected card (compset stays open).
+  const selectCompsetPeer = useCallback(
+    (peerId: number) => {
+      const f = featuresById.get(peerId);
+      if (!f) return;
+      const [lng, lat] = f.geometry.coordinates;
+      controls.current?.flyTo(lng, lat);
+    },
+    [featuresById]
+  );
+
+  const removedPeerIdList = useMemo(
+    () => [...removedPeerIds],
+    [removedPeerIds]
+  );
+
   const selectMarket = useCallback(
     (city: string) => {
       setSelected(null);
@@ -1139,9 +1454,27 @@ export default function MapView() {
       return next;
     });
 
+  const toggleClass = useCallback(
+    (value: string) =>
+      setActiveClasses((prev) => {
+        const next = new Set(prev);
+        if (next.has(value)) next.delete(value);
+        else next.add(value);
+        return next;
+      }),
+    []
+  );
+
+  const resetSegment = useCallback(() => {
+    setActiveClasses(new Set());
+    setSubmarket(null);
+  }, []);
+
   const resetAll = useCallback(() => {
     setActiveBuckets(new Set(ALL_BUCKETS));
     setActiveBrands(new Set());
+    setActiveClasses(new Set());
+    setSubmarket(null);
     setRevparRange(ranges.revpar);
     setRoomsRange(ranges.rooms);
     setQuery("");
@@ -1174,6 +1507,10 @@ export default function MapView() {
     setRevparRange(preset.revparRange);
     setRoomsRange(preset.roomsRange);
     setActiveBrands(new Set(preset.activeBrands));
+    // Saved views predate the class/submarket dimensions; clear them so a
+    // loaded preset yields a predictable, fully-specified filter state.
+    setActiveClasses(new Set());
+    setSubmarket(null);
     setQuery(preset.query);
   }, []);
 
@@ -1237,6 +1574,8 @@ export default function MapView() {
   const hasFilters =
     activeBuckets.size < ALL_BUCKETS.length ||
     activeBrands.size > 0 ||
+    activeClasses.size > 0 ||
+    submarket != null ||
     revparVal[0] > ranges.revpar[0] ||
     revparVal[1] < ranges.revpar[1] ||
     roomsVal[0] > ranges.rooms[0] ||
@@ -1255,8 +1594,10 @@ export default function MapView() {
       mapType: mapTypeIndex,
       sort,
       q: query,
+      classes: [...activeClasses],
+      submarket: submarket ?? "",
     }),
-    [activeBuckets, layerMode, mapTypeIndex, sort, query]
+    [activeBuckets, layerMode, mapTypeIndex, sort, query, activeClasses, submarket]
   );
 
   useUrlState(urlState, (partial) => {
@@ -1267,6 +1608,9 @@ export default function MapView() {
       setActiveBuckets(new Set(partial.buckets));
     if (partial.sort) setSort(partial.sort);
     if (partial.q != null) setQuery(partial.q);
+    if (partial.classes && partial.classes.length > 0)
+      setActiveClasses(new Set(partial.classes));
+    if (partial.submarket) setSubmarket(partial.submarket);
   });
 
   useKeyboardShortcuts({
@@ -1278,6 +1622,7 @@ export default function MapView() {
     onRecenter: () => controls.current?.recenter(),
     onEscape: () => {
       if (helpOpen) setHelpOpen(false);
+      else if (compsetSubjectId != null) closeCompset();
       else if (areaMode) clearArea();
       else setSelected(null);
     },
@@ -1363,6 +1708,10 @@ export default function MapView() {
               visible={layerMode === "pins" && !svOpen}
               onSelect={flyToFeature}
               onHover={setHovered}
+              compsetActive={compsetResult != null}
+              compsetSubjectId={compsetSubjectId}
+              compsetPeerIds={compsetPeerIds}
+              compsetFeatures={compsetFeatures}
             />
             <HeatLayer
               features={filtered}
@@ -1509,7 +1858,7 @@ export default function MapView() {
               : undefined
           }
         />
-        <div className="hidden md:block">
+        <div className="hidden md:flex md:flex-col md:gap-2.5">
           <RangeFilters
             revparMin={ranges.revpar[0]}
             revparMax={ranges.revpar[1]}
@@ -1530,17 +1879,24 @@ export default function MapView() {
             counts={brandCounts}
             onReset={() => setActiveBrands(new Set())}
           />
-          <div className="mt-2">
-            <FilterPresets
-              presets={savedPresets}
-              recentSearches={recentSearches}
-              canSave={hasFilters || query.trim().length > 0}
-              onSavePreset={savePreset}
-              onLoadPreset={loadPreset}
-              onDeletePreset={deletePreset}
-              onLoadSearch={setQuery}
-            />
-          </div>
+          <SegmentFilter
+            classOptions={classOptions}
+            activeClasses={activeClasses}
+            onToggleClass={toggleClass}
+            submarketOptions={submarketOptions}
+            submarket={submarket}
+            onSubmarketChange={setSubmarket}
+            onReset={resetSegment}
+          />
+          <FilterPresets
+            presets={savedPresets}
+            recentSearches={recentSearches}
+            canSave={hasFilters || query.trim().length > 0}
+            onSavePreset={savePreset}
+            onLoadPreset={loadPreset}
+            onDeletePreset={deletePreset}
+            onLoadSearch={setQuery}
+          />
         </div>
         {areaSelection ? (
           <AreaSummary
@@ -1645,7 +2001,7 @@ export default function MapView() {
         />
       </div>
 
-      {selected && !svOpen && (
+      {selected && !svOpen && compsetSubjectId == null && (
         <PropertyCard
           hotel={selected.properties}
           history={
@@ -1663,7 +2019,31 @@ export default function MapView() {
           streetViewUrl={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${
             selected.geometry.coordinates[1]
           },${selected.geometry.coordinates[0]}`}
+          onViewCompset={
+            selected.properties.id != null
+              ? () => openCompset(selected)
+              : undefined
+          }
         />
+      )}
+
+      {compsetResult && compsetSubject && !svOpen && (
+        <div
+          className={
+            isMobile
+              ? "fixed inset-x-0 bottom-0 z-30 h-[82vh] print:hidden"
+              : "absolute z-30 inset-x-2 bottom-2 top-[68px] md:inset-x-auto md:left-4 md:right-auto md:top-auto md:bottom-6 md:h-[70vh] md:w-80 print:hidden"
+          }
+        >
+          <CompsetPanel
+            subject={compsetSubject}
+            result={compsetResult}
+            onClose={closeCompset}
+            onTogglePeer={toggleCompsetPeer}
+            onSelectPeer={selectCompsetPeer}
+            removedPeerIds={removedPeerIdList}
+          />
+        </div>
       )}
 
       {dataError && (

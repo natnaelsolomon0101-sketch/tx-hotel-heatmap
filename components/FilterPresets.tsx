@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { FilterPreset } from "@/lib/presets";
 
 type FilterPresetsProps = {
@@ -17,7 +17,7 @@ type FilterPresetsProps = {
 // "Saved views" control: a Save-current-view button plus a dropdown menu
 // that restores saved presets and recent searches. Presets persist in
 // localStorage (see lib/presets.ts); this is purely the UI surface.
-export default function FilterPresets({
+function FilterPresets({
   presets,
   recentSearches,
   canSave,
@@ -129,6 +129,8 @@ export default function FilterPresets({
               strokeWidth={1.8}
               strokeLinecap="round"
               strokeLinejoin="round"
+              aria-hidden="true"
+              focusable={false}
             >
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
@@ -228,6 +230,8 @@ export default function FilterPresets({
                     strokeWidth={1.8}
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable={false}
                   >
                     <circle cx="11" cy="11" r="7" />
                     <path d="M21 21l-4.3-4.3" />
@@ -242,3 +246,5 @@ export default function FilterPresets({
     </div>
   );
 }
+
+export default memo(FilterPresets);

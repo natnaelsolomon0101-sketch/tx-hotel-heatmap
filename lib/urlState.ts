@@ -26,6 +26,10 @@ export interface UrlState {
   sort: SortKey;
   /** Search query. */
   q: string;
+  /** Active hotel class / chain-scale tiers (compset enrichment). */
+  classes: string[];
+  /** Active submarket, or "" for all (compset enrichment). */
+  submarket: string;
 }
 
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
@@ -43,6 +47,8 @@ const PARAM = {
   mapType: "mt",
   sort: "sort",
   q: "q",
+  classes: "cls",
+  submarket: "sm",
 } as const;
 
 function isBucket(v: string): v is Bucket {
@@ -81,6 +87,16 @@ export function encodeState(state: UrlState): string {
   const q = state.q?.trim();
   if (q) {
     sp.set(PARAM.q, q);
+  }
+
+  const classes = (state.classes ?? []).filter((c) => c.trim());
+  if (classes.length > 0) {
+    sp.set(PARAM.classes, classes.join(","));
+  }
+
+  const submarket = state.submarket?.trim();
+  if (submarket) {
+    sp.set(PARAM.submarket, submarket);
   }
 
   return sp.toString();
@@ -134,6 +150,26 @@ export function decodeState(
   if (q != null) {
     const trimmed = q.trim();
     if (trimmed) out.q = trimmed;
+  }
+
+  const rawClasses = sp.get(PARAM.classes);
+  if (rawClasses != null) {
+    // Class values carry no commas, so a plain split is safe; de-dupe + trim.
+    const classes = [
+      ...new Set(
+        rawClasses
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      ),
+    ];
+    if (classes.length > 0) out.classes = classes;
+  }
+
+  const submarket = sp.get(PARAM.submarket);
+  if (submarket != null) {
+    const trimmed = submarket.trim();
+    if (trimmed) out.submarket = trimmed;
   }
 
   return out;
@@ -201,6 +237,13 @@ export function describeView(
     );
     parts.push(`buckets: ${labels.join("+")}`);
   }
+
+  if (state.classes && state.classes.length > 0) {
+    parts.push(`class: ${state.classes.join("+")}`);
+  }
+
+  const submarket = state.submarket?.trim();
+  if (submarket) parts.push(submarket);
 
   const q = state.q?.trim();
   if (q) parts.push(`“${q}”`);
