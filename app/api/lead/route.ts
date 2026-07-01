@@ -124,7 +124,7 @@ async function sendToAirtable(
 ): Promise<{ ok: boolean; error?: string }> {
   const pat = process.env.AIRTABLE_PAT;
   const baseId = process.env.AIRTABLE_BASE_ID;
-  const tableName = process.env.AIRTABLE_LEADS_TABLE || "Website Leads";
+  const tableName = process.env.AIRTABLE_LEADS_TABLE || "TX RevPAR Leads";
 
   if (!pat || !baseId) return { ok: false, error: "Airtable not configured." };
 
