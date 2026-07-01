@@ -1,5 +1,6 @@
 "use client";
 
+import { ReactNode } from "react";
 import { PortfolioStats, fmtMoney, fmtMarket } from "@/lib/stats";
 
 function Stat({
@@ -29,6 +30,7 @@ export default function HeaderBar({
   dataAge,
   refreshState = "idle",
   onRefresh,
+  actions,
 }: {
   stats: PortfolioStats;
   period: string;
@@ -37,6 +39,9 @@ export default function HeaderBar({
   // Refresh button feedback state, mirrored from MapView.
   refreshState?: "idle" | "loading" | "refreshed";
   onRefresh?: () => void;
+  // Right-aligned action buttons (share / theme / brief). Rendered inside the
+  // header's flex row so they never overlap the stat cluster.
+  actions?: ReactNode;
 }) {
   // Only call out staleness once the data is more than a day old.
   const stale = dataAge != null && dataAge > 1;
@@ -125,7 +130,7 @@ export default function HeaderBar({
         </div>
       </div>
 
-      <div className="flex items-center gap-4 md:gap-6">
+      <div className="flex min-w-0 items-center gap-4 md:gap-6">
         <Stat label="Hotels" value={stats.total.toLocaleString()} />
         <Stat label="Avg RevPAR" value={fmtMoney(stats.avgRevpar)} />
         <Stat
@@ -138,6 +143,9 @@ export default function HeaderBar({
           value={fmtMarket(stats.topMarket)}
           hideOnMobile
         />
+        {actions && (
+          <div className="flex shrink-0 items-center gap-2 pl-1">{actions}</div>
+        )}
       </div>
 
       <span aria-live="polite" className="sr-only">

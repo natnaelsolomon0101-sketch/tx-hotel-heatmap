@@ -1751,8 +1751,8 @@ export default function MapView() {
           dataAge={dataAge}
           refreshState={refreshState}
           onRefresh={refreshData}
-        />
-        <div className="absolute right-3 top-2.5 z-40 flex items-center gap-2 md:right-4">
+          actions={
+            <>
           <ShareButton
             urlState={urlState}
             ranges={ranges}
@@ -1799,7 +1799,9 @@ export default function MapView() {
             )}
           </button>
           <BriefButton />
-        </div>
+            </>
+          }
+        />
       </div>
 
       <div className={`print:hidden ${svOpen ? "hidden" : ""}`}>
