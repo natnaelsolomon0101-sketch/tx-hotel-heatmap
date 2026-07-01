@@ -107,18 +107,22 @@ function CompareRow({
 function PeerRow({
   peer,
   removed,
+  showAdr,
+  cols,
   onToggle,
   onSelect,
 }: {
   peer: CompsetPeer;
   removed: boolean;
+  showAdr: boolean;
+  cols: string;
   onToggle?: (peerId: number) => void;
   onSelect?: (peerId: number) => void;
 }) {
   const name = titleCase(peer.name);
   return (
     <div
-      className={`grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-2.5 border-t border-border py-1.5 ${
+      className={`grid ${cols} items-center gap-x-2.5 border-t border-border py-1.5 ${
         removed ? "opacity-50" : ""
       }`}
     >
@@ -146,9 +150,11 @@ function PeerRow({
       <span className="text-data-sm text-foreground tabular-nums text-right">
         {fmtMoney(peer.revpar)}
       </span>
-      <span className="text-meta font-mono text-muted-foreground tabular-nums text-right">
-        {fmtMoney(peer.adr)}
-      </span>
+      {showAdr && (
+        <span className="text-meta font-mono text-muted-foreground tabular-nums text-right">
+          {fmtMoney(peer.adr)}
+        </span>
+      )}
 
       <span className="flex items-center justify-end gap-1.5">
         <span className="text-meta text-subtle tabular-nums">
@@ -188,19 +194,22 @@ function CompsetPanel({
   const removed = new Set(removedPeerIds ?? []);
 
   // Basis line: submarket + scale, or radius + tier, matching the two compset modes.
+  // Submarket/scale come from STR data already properly cased (e.g. "Dallas
+  // CBD/Market Center", "Upper Upscale"), so they are used raw — titleCase is
+  // only for the ALL-CAPS comptroller hotel names.
   const scaleLabel = result.scale ?? result.hotelClass ?? null;
   const basisLine =
     result.basis === "submarket-scale"
       ? [
-          result.submarket ? `Submarket: ${titleCase(result.submarket)}` : "Submarket",
-          scaleLabel ? titleCase(scaleLabel) : null,
+          result.submarket ? `Submarket: ${result.submarket}` : "Submarket",
+          scaleLabel,
           `${result.count} ${result.count === 1 ? "peer" : "peers"}`,
         ]
           .filter(Boolean)
           .join(" · ")
       : [
           result.radiusMi != null ? `Within ${result.radiusMi} mi` : "Nearby",
-          scaleLabel ? titleCase(scaleLabel) : null,
+          scaleLabel,
         ]
           .filter(Boolean)
           .join(" · ");
@@ -221,6 +230,16 @@ function CompsetPanel({
   const revparDelta = moneyDelta(subjectRevpar, result.avgRevpar);
   const adrDelta = moneyDelta(p.adr, result.avgAdr);
   const occD = occDelta(p.occupancy, result.avgOccupancy);
+
+  // Comptroller data carries no ADR/occupancy, so those rows are usually empty.
+  // Hide a metric when neither the subject nor the compset average has a value,
+  // rather than showing a row of em-dashes.
+  const showAdrRow = p.adr != null || result.avgAdr != null;
+  const showOccRow = p.occupancy != null || result.avgOccupancy != null;
+  const showPeerAdr = showAdrRow || result.peers.some((pe) => pe.adr != null);
+  const peerCols = showPeerAdr
+    ? "grid-cols-[minmax(0,1fr)_auto_auto_auto]"
+    : "grid-cols-[minmax(0,1fr)_auto_auto]";
 
   return (
     <section
@@ -273,18 +292,22 @@ function CompsetPanel({
               avgValue={fmtMoney(result.avgRevpar)}
               delta={revparDelta}
             />
-            <CompareRow
-              label="ADR"
-              subjectValue={fmtMoney(p.adr)}
-              avgValue={fmtMoney(result.avgAdr)}
-              delta={adrDelta}
-            />
-            <CompareRow
-              label="Occupancy"
-              subjectValue={pct(p.occupancy)}
-              avgValue={pct(result.avgOccupancy)}
-              delta={occD}
-            />
+            {showAdrRow && (
+              <CompareRow
+                label="ADR"
+                subjectValue={fmtMoney(p.adr)}
+                avgValue={fmtMoney(result.avgAdr)}
+                delta={adrDelta}
+              />
+            )}
+            {showOccRow && (
+              <CompareRow
+                label="Occupancy"
+                subjectValue={pct(p.occupancy)}
+                avgValue={pct(result.avgOccupancy)}
+                delta={occD}
+              />
+            )}
           </div>
 
           {/* Rank + percentile */}
@@ -300,10 +323,12 @@ function CompsetPanel({
 
           {/* Peer table */}
           <div className="mt-4 border-t border-border pt-3">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-baseline gap-x-2.5">
+            <div className={`grid ${peerCols} items-baseline gap-x-2.5`}>
               <span className="label-overline">Peer ({result.count})</span>
               <span className="label-overline text-right">RevPAR</span>
-              <span className="label-overline text-right">ADR</span>
+              {showPeerAdr && (
+                <span className="label-overline text-right">ADR</span>
+              )}
               <span className="label-overline text-right">Dist</span>
             </div>
             <div className="mt-1">
@@ -312,6 +337,8 @@ function CompsetPanel({
                   key={peer.id}
                   peer={peer}
                   removed={removed.has(peer.id)}
+                  showAdr={showPeerAdr}
+                  cols={peerCols}
                   onToggle={onTogglePeer}
                   onSelect={onSelectPeer}
                 />
