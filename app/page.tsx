@@ -1,5 +1,7 @@
 import dynamic from "next/dynamic";
 import MapSkeleton from "@/components/MapSkeleton";
+import LeadGate from "@/components/LeadGate";
+import SiteFooter from "@/components/SiteFooter";
 
 // The map (Google Maps + deck.gl) touches `window` on import, so it's client-only.
 const MapView = dynamic(() => import("@/components/MapView"), {
@@ -11,6 +13,8 @@ export default function Home() {
   return (
     <main id="main-content" tabIndex={-1} className="h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
       <MapView />
+      <SiteFooter />
+      <LeadGate />
     </main>
   );
 }

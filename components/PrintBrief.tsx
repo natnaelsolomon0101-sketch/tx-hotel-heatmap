@@ -3,6 +3,7 @@
 import { BUCKET_COLORS, BUCKET_LABELS, Bucket, HotelFeature } from "@/lib/types";
 import { PortfolioStats, fmtMoney, fmtMarket } from "@/lib/stats";
 import { titleCase } from "@/lib/format";
+import { FOOTER_DISCLOSURE } from "@/lib/disclaimer";
 
 type PrintBriefProps = {
   stats: PortfolioStats;
@@ -151,6 +152,7 @@ export default function PrintBrief({ stats, topRows, period }: PrintBriefProps) 
         TX Hotel RevPAR Intelligence &middot; RevPAR = trailing-12-month (T12)
         revenue ÷ rooms ÷ 365, per night. Figures reflect the current map filter
         and viewport at time of generation.
+        <span className="mt-1 block">{FOOTER_DISCLOSURE}</span>
       </footer>
     </div>
   );
