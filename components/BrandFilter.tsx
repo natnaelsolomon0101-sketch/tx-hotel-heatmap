@@ -44,7 +44,7 @@ export default function BrandFilter({
   };
 
   return (
-    <div className="hidden shrink-0 rounded-panel bg-surface p-3 shadow-sm ring-1 ring-border md:block">
+    <div className="shrink-0 rounded-panel bg-surface p-3 shadow-sm ring-1 ring-border">
       <div className="mb-2 flex items-center justify-between">
         <h2 id="brand-filter-heading" className="label-overline">Brand</h2>
         <button

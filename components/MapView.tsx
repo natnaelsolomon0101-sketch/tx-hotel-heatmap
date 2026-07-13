@@ -953,6 +953,8 @@ export default function MapView() {
   const [rollupDim, setRollupDim] = useState<RollupDim>("zip");
   // Mobile bottom-sheet collapse (desktop always shows the full side panel).
   const [sheetOpen, setSheetOpen] = useState(true);
+  // Mobile filters accordion (desktop shows filters inline, always expanded).
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   // True while the Street View panorama is open — hide our overlay UI + pins.
   const [svOpen, setSvOpen] = useState(false);
   // Hovered pin (name/RevPAR/rooms tooltip). Independent of `selected` — hover
@@ -1918,7 +1920,7 @@ export default function MapView() {
 
       <div
         className={`absolute z-20 flex flex-col gap-2.5 print:hidden
-          inset-x-2 bottom-2 max-h-[60vh]
+          inset-x-2 bottom-2 max-h-[60dvh]
           md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3 ${
             svOpen ? "hidden" : ""
           }`}
@@ -1953,7 +1955,52 @@ export default function MapView() {
               : undefined
           }
         />
-        <div className="hidden md:flex md:flex-col md:gap-2.5">
+        {/* Filters: always inline on desktop; a tappable accordion on mobile so
+            phone users can still filter by RevPAR/rooms/brand/segment. */}
+        <button
+          type="button"
+          onClick={() => setMobileFiltersOpen((o) => !o)}
+          aria-expanded={mobileFiltersOpen}
+          className="flex shrink-0 items-center justify-between rounded-panel bg-surface px-3 py-2.5 text-xs font-semibold text-foreground shadow-md ring-1 ring-border md:hidden"
+        >
+          <span className="flex items-center gap-2">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-4 w-4 text-muted-foreground"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.9}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 5h18M6 12h12M10 19h4" />
+            </svg>
+            Filters
+            {hasFilters && (
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+            )}
+          </span>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className={`h-4 w-4 text-muted-foreground transition-transform ${
+              mobileFiltersOpen ? "rotate-180" : ""
+            }`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.9}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+        <div
+          className={`flex-col gap-2.5 md:flex md:flex-col md:gap-2.5 ${
+            mobileFiltersOpen ? "flex" : "hidden"
+          }`}
+        >
           <RangeFilters
             revparMin={ranges.revpar[0]}
             revparMax={ranges.revpar[1]}
@@ -2126,7 +2173,7 @@ export default function MapView() {
         <div
           className={
             isMobile
-              ? "fixed inset-x-0 bottom-0 z-30 h-[82vh] print:hidden"
+              ? "fixed inset-x-0 bottom-0 z-30 h-[82dvh] print:hidden"
               : "absolute z-30 inset-x-2 bottom-2 top-[68px] md:inset-x-auto md:left-4 md:right-auto md:top-auto md:bottom-6 md:h-[70vh] md:w-80 print:hidden"
           }
         >

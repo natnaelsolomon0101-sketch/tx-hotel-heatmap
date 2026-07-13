@@ -184,7 +184,7 @@ function RangeFilters({
   const roomsStep = Math.max(1, Math.round((roomsMax - roomsMin) / 200));
 
   return (
-    <div className="hidden shrink-0 rounded-panel bg-surface p-3 shadow-sm ring-1 ring-border md:block">
+    <div className="shrink-0 rounded-panel bg-surface p-3 shadow-sm ring-1 ring-border">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="label-overline">Range filters</h2>
         <button

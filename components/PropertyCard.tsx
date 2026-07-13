@@ -260,8 +260,8 @@ function PropertyCard({
       aria-label={titleCase(hotel.name)}
       className={
         isMobile
-          ? "fixed inset-x-0 bottom-0 z-30 flex max-h-[90vh] flex-col overflow-hidden rounded-t-panel bg-surface shadow-lg ring-1 ring-border"
-          : "absolute z-30 overflow-hidden rounded-panel bg-surface shadow-lg ring-1 ring-border inset-x-2 bottom-2 max-h-[80vh] overflow-y-auto md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-none"
+          ? "fixed inset-x-0 bottom-0 z-30 flex max-h-[90dvh] flex-col overflow-hidden rounded-t-panel bg-surface shadow-lg ring-1 ring-border"
+          : "absolute z-30 overflow-hidden rounded-panel bg-surface shadow-lg ring-1 ring-border inset-x-2 bottom-2 max-h-[80dvh] overflow-y-auto md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-none"
       }
       style={
         isMobile
