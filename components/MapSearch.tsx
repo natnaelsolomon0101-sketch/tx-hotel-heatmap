@@ -20,30 +20,48 @@ export default function MapSearch({
 
   const q = term.trim().toLowerCase();
 
-  // Rank address matches first (that's the primary lookup), then name, city,
-  // ZIP. Scan is capped so a 5k+ dataset stays snappy on every keystroke.
+  // Precompute a normalized "haystack" per hotel (name + address + city +
+  // state + zip) so every keystroke is a cheap scan even on 5k+ hotels.
+  const rows = useMemo(
+    () =>
+      features.map((f) => {
+        const p = f.properties;
+        const norm = (s: string) => s.toLowerCase().replace(/[.,#]/g, " ");
+        return {
+          f,
+          hay: norm(
+            [p.name, p.address, p.city, p.state, p.zip]
+              .filter(Boolean)
+              .join(" ")
+          ),
+          addr: norm(p.address || ""),
+          name: norm(p.name || ""),
+        };
+      }),
+    [features]
+  );
+
+  // Tokenized AND match: split the query on spaces/punctuation and require
+  // EVERY token to appear somewhere in the hotel's fields. This makes a full
+  // formatted address ("600 W 2nd St, Austin, TX 78701") match even though the
+  // street, city, state, and ZIP are stored in separate fields. Rank hotels
+  // whose street address contains the first token (usually the house number)
+  // ahead of incidental name/city matches.
   const matches = useMemo(() => {
     if (q.length < 2) return [];
-    const scored: { f: HotelFeature; score: number }[] = [];
-    for (const f of features) {
-      const p = f.properties;
-      const name = (p.name || "").toLowerCase();
-      const addr = (p.address || "").toLowerCase();
-      const city = (p.city || "").toLowerCase();
-      const zip = (p.zip ?? "").toString().toLowerCase();
-      let score = -1;
-      if (addr.startsWith(q)) score = 0;
-      else if (name.startsWith(q)) score = 1;
-      else if (addr.includes(q)) score = 2;
-      else if (name.includes(q)) score = 3;
-      else if (city.includes(q)) score = 4;
-      else if (zip.includes(q)) score = 5;
-      if (score >= 0) scored.push({ f, score });
-      if (scored.length > 600) break;
+    const tokens = q.replace(/[.,#]/g, " ").split(/\s+/).filter(Boolean);
+    if (!tokens.length) return [];
+    const out: { f: HotelFeature; score: number }[] = [];
+    for (const r of rows) {
+      if (!tokens.every((t) => r.hay.includes(t))) continue;
+      const t0 = tokens[0];
+      const score = r.addr.includes(t0) ? 0 : r.name.includes(t0) ? 1 : 2;
+      out.push({ f: r.f, score });
+      if (out.length > 400) break;
     }
-    scored.sort((a, b) => a.score - b.score);
-    return scored.slice(0, 8).map((s) => s.f);
-  }, [q, features]);
+    out.sort((a, b) => a.score - b.score);
+    return out.slice(0, 8).map((s) => s.f);
+  }, [q, rows]);
 
   useEffect(() => setActive(0), [q]);
 

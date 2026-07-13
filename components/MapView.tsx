@@ -1214,13 +1214,19 @@ export default function MapView() {
         (f) => (f.properties.zip ?? "").toString().trim().toLowerCase() === z
       );
     } else if (q) {
-      feats = feats.filter(
-        (f) =>
-          f.properties.name.toLowerCase().includes(q) ||
-          f.properties.city.toLowerCase().includes(q) ||
-          f.properties.address.toLowerCase().includes(q) ||
-          (f.properties.zip ?? "").toString().toLowerCase().includes(q)
-      );
+      // Tokenized AND match across name + address + city + state + zip so a
+      // full formatted address (e.g. "600 W 2nd St, Austin, TX 78701") matches
+      // even though those parts live in separate fields.
+      const toks = q.replace(/[.,#]/g, " ").split(/\s+/).filter(Boolean);
+      feats = feats.filter((f) => {
+        const p = f.properties;
+        const hay = `${p.name} ${p.address} ${p.city} ${p.state} ${
+          p.zip ?? ""
+        }`
+          .toLowerCase()
+          .replace(/[.,#]/g, " ");
+        return toks.every((t) => hay.includes(t));
+      });
     } else if (bounds) {
       const [w, s, e, n] = bounds;
       feats = feats.filter((f) => {
