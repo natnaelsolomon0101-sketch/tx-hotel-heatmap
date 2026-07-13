@@ -339,6 +339,7 @@ function MarkersLayer({
   compsetSubjectId = null,
   compsetPeerIds,
   compsetFeatures,
+  selectedFeature = null,
 }: {
   features: HotelFeature[];
   visible: boolean;
@@ -353,6 +354,8 @@ function MarkersLayer({
   compsetSubjectId?: number | null;
   compsetPeerIds?: Set<number>;
   compsetFeatures?: HotelFeature[];
+  // The currently clicked/searched hotel to spotlight on the map.
+  selectedFeature?: HotelFeature | null;
 }) {
   const map = useMap();
   const overlayRef = useRef<GoogleMapsOverlay | null>(null);
@@ -628,6 +631,81 @@ function MarkersLayer({
       );
     }
 
+    // Selection spotlight — a bold ring + dot drawn ON TOP of everything
+    // (including clusters) at the clicked/searched hotel, fed straight from the
+    // selected feature so it shows regardless of active filters or zoom.
+    if (selectedFeature && selectedFeature.geometry?.coordinates) {
+      const focusData = [selectedFeature];
+      const focusPos = (f: HotelFeature) =>
+        f.geometry.coordinates as [number, number];
+      const focusTrig = { getPosition: [selectedFeature] };
+      layers.push(
+        new ScatterplotLayer<HotelFeature>({
+          id: "focus-halo",
+          data: focusData,
+          getPosition: focusPos,
+          getRadius: 18,
+          radiusUnits: "pixels",
+          radiusMinPixels: 14,
+          radiusMaxPixels: 26,
+          filled: true,
+          stroked: false,
+          getFillColor: [37, 99, 235, 45],
+          pickable: false,
+          updateTriggers: focusTrig,
+        }),
+        new ScatterplotLayer<HotelFeature>({
+          id: "focus-ring-white",
+          data: focusData,
+          getPosition: focusPos,
+          getRadius: 12,
+          radiusUnits: "pixels",
+          radiusMinPixels: 9,
+          radiusMaxPixels: 16,
+          filled: false,
+          stroked: true,
+          lineWidthUnits: "pixels",
+          getLineWidth: 5,
+          getLineColor: [255, 255, 255, 235],
+          pickable: false,
+          updateTriggers: focusTrig,
+        }),
+        new ScatterplotLayer<HotelFeature>({
+          id: "focus-ring",
+          data: focusData,
+          getPosition: focusPos,
+          getRadius: 12,
+          radiusUnits: "pixels",
+          radiusMinPixels: 9,
+          radiusMaxPixels: 16,
+          filled: false,
+          stroked: true,
+          lineWidthUnits: "pixels",
+          getLineWidth: 2.5,
+          getLineColor: [37, 99, 235, 255],
+          pickable: false,
+          updateTriggers: focusTrig,
+        }),
+        new ScatterplotLayer<HotelFeature>({
+          id: "focus-dot",
+          data: focusData,
+          getPosition: focusPos,
+          getRadius: 4,
+          radiusUnits: "pixels",
+          radiusMinPixels: 3,
+          radiusMaxPixels: 6,
+          filled: true,
+          stroked: true,
+          lineWidthUnits: "pixels",
+          getLineWidth: 1.5,
+          getFillColor: [37, 99, 235, 255],
+          getLineColor: [255, 255, 255, 255],
+          pickable: false,
+          updateTriggers: focusTrig,
+        })
+      );
+    }
+
     overlay.setProps({ layers });
     // `map` is in the deps so this re-runs once the overlay is created (Effect A
     // runs first in the same commit); without it the layer never attaches on
@@ -646,6 +724,7 @@ function MarkersLayer({
     compsetSubjectId,
     compsetPeerIds,
     compsetFeatures,
+    selectedFeature,
   ]);
 
   return null;
@@ -1714,6 +1793,7 @@ export default function MapView() {
             />
             <MarkersLayer
               features={filtered}
+              selectedFeature={selected}
               visible={layerMode === "pins" && !svOpen}
               onSelect={flyToFeature}
               onHover={setHovered}
