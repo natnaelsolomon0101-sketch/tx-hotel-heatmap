@@ -44,6 +44,7 @@ import RangeFilters, { Range } from "./RangeFilters";
 import { decodeState, useUrlState, UrlState } from "@/lib/urlState";
 import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
 import { useMediaQuery } from "@/lib/useMediaQuery";
+import { reportActivity } from "@/lib/activity";
 const ShortcutsHelp = dynamic(() => import("./ShortcutsHelp"), {
   ssr: false,
   loading: () => null,
@@ -963,6 +964,27 @@ export default function MapView() {
   // Touchscreen layout switch — drives PropertyCard's bottom-sheet rendering.
   // Matches the Tailwind `md` breakpoint (<768px) used across the overlay UI.
   const isMobile = useMediaQuery("(max-width: 767px)");
+
+  // Fire a single "active session" HubSpot ping the first time a registered
+  // visitor interacts (click or keypress). reportActivity no-ops for anonymous
+  // visitors and self-throttles to 1/30min, so returning leads generate one
+  // notification per visit rather than one per click.
+  useEffect(() => {
+    let done = false;
+    const fire = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("pointerdown", fire);
+      window.removeEventListener("keydown", fire);
+      reportActivity("browsing the map");
+    };
+    window.addEventListener("pointerdown", fire, { passive: true });
+    window.addEventListener("keydown", fire);
+    return () => {
+      window.removeEventListener("pointerdown", fire);
+      window.removeEventListener("keydown", fire);
+    };
+  }, []);
   const watchlist = useWatchlist();
   const [revparRange, setRevparRange] = useState<Range | null>(null);
   const [roomsRange, setRoomsRange] = useState<Range | null>(null);

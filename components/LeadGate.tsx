@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { APP_NAME, FIRST_RUN_ACK } from "@/lib/disclaimer";
+import { markActivityBaseline } from "@/lib/activity";
 
 const STORAGE_KEY = "txrevpar.lead.v1";
 
@@ -104,6 +105,9 @@ export default function LeadGate() {
       } catch {
         /* tracking script not loaded yet — non-fatal */
       }
+      // Registration already fired a "new lead" notification; suppress the
+      // "active session" ping for this first visit so owners aren't double-pinged.
+      markActivityBaseline();
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Please try again.");
