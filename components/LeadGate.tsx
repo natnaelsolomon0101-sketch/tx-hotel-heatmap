@@ -94,6 +94,16 @@ export default function LeadGate() {
       } catch {
         /* storage disabled — gate will re-show next visit, acceptable */
       }
+      // Tell HubSpot who this visitor is so the anonymous tracking session (and
+      // future pageviews) stitch to the contact we just created server-side.
+      try {
+        const w = window as unknown as { _hsq?: unknown[][] };
+        const hsq = (w._hsq = w._hsq || []);
+        hsq.push(["identify", { email, firstname: name }]);
+        hsq.push(["trackPageView"]);
+      } catch {
+        /* tracking script not loaded yet — non-fatal */
+      }
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Please try again.");

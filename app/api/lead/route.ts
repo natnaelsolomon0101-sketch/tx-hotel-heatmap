@@ -31,7 +31,15 @@ type LeadPayload = {
 
 const HUBSPOT_CONTACTS_ENDPOINT =
   "https://api.hubapi.com/crm/v3/objects/contacts";
+const HUBSPOT_TASKS_ENDPOINT = "https://api.hubapi.com/crm/v3/objects/tasks";
 const LEAD_SOURCE_LABEL = "TX Hotel RevPAR Intelligence";
+
+// Owners who get an instant HubSpot notification when a new visitor registers.
+// A task assigned to each fires that owner's task-assignment notification.
+// Nate = 87647669, Luke = 74418463.
+const NOTIFY_OWNER_IDS = ["87647669", "74418463"];
+// Default HUBSPOT_DEFINED association type id for Task -> Contact.
+const TASK_TO_CONTACT_ASSOC_TYPE = 204;
 
 function bad(status: number, error: string, code?: string) {
   return NextResponse.json({ ok: false, error, code }, { status });
@@ -46,9 +54,11 @@ function splitName(name: string): { firstName: string; lastName: string } {
 
 type HubSpotStatus = "Synced" | "Skipped (cap)" | "Error";
 
-async function sendToHubSpot(payload: LeadPayload): Promise<HubSpotStatus> {
+type HubSpotResult = { status: HubSpotStatus; contactId: string | null };
+
+async function sendToHubSpot(payload: LeadPayload): Promise<HubSpotResult> {
   const token = process.env.HUBSPOT_TOKEN;
-  if (!token) return "Skipped (cap)";
+  if (!token) return { status: "Skipped (cap)", contactId: null };
 
   const { firstName, lastName } = splitName(payload.name);
   const body = {
@@ -92,7 +102,7 @@ async function sendToHubSpot(payload: LeadPayload): Promise<HubSpotStatus> {
         }),
       });
       const sj = (await search.json()) as { results?: { id: string }[] };
-      const id = sj.results?.[0]?.id;
+      const id = sj.results?.[0]?.id ?? null;
       if (id) {
         await fetch(`${HUBSPOT_CONTACTS_ENDPOINT}/${id}`, {
           method: "PATCH",
@@ -103,19 +113,88 @@ async function sendToHubSpot(payload: LeadPayload): Promise<HubSpotStatus> {
           body: JSON.stringify(body),
         });
       }
-      return "Synced";
+      return { status: "Synced", contactId: id };
     }
 
-    if (res.status === 402) return "Skipped (cap)";
+    if (res.status === 402) return { status: "Skipped (cap)", contactId: null };
     if (!res.ok) {
       console.error("[lead] hubspot non-OK", res.status, await res.text());
-      return "Error";
+      return { status: "Error", contactId: null };
     }
-    return "Synced";
+    const created = (await res.json()) as { id?: string };
+    return { status: "Synced", contactId: created.id ?? null };
   } catch (err) {
     console.error("[lead] hubspot fetch threw", err);
-    return "Error";
+    return { status: "Error", contactId: null };
   }
+}
+
+/**
+ * Instant-notification pipe. Creates one HubSpot task per owner in
+ * NOTIFY_OWNER_IDS, each associated to the freshly-created contact and due now,
+ * so every owner gets HubSpot's task-assignment notification the moment a
+ * visitor registers. Best-effort: failures are logged, never block the lead.
+ */
+async function notifyOwners(
+  token: string,
+  contactId: string,
+  payload: LeadPayload
+): Promise<void> {
+  const now = Date.now();
+  const detail = [
+    `${payload.name} just registered on the ${LEAD_SOURCE_LABEL} site.`,
+    `Email: ${payload.email}`,
+    payload.phone ? `Phone: ${payload.phone}` : "",
+    payload.pageUri ? `Page: ${payload.pageUri}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  await Promise.all(
+    NOTIFY_OWNER_IDS.map(async (ownerId) => {
+      try {
+        const res = await fetch(HUBSPOT_TASKS_ENDPOINT, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            properties: {
+              hs_task_subject: `New website lead: ${payload.name}`,
+              hs_task_body: detail,
+              hs_task_status: "NOT_STARTED",
+              hs_task_priority: "HIGH",
+              hs_task_type: "TODO",
+              hs_timestamp: String(now),
+              hubspot_owner_id: ownerId,
+            },
+            associations: [
+              {
+                to: { id: contactId },
+                types: [
+                  {
+                    associationCategory: "HUBSPOT_DEFINED",
+                    associationTypeId: TASK_TO_CONTACT_ASSOC_TYPE,
+                  },
+                ],
+              },
+            ],
+          }),
+        });
+        if (!res.ok) {
+          console.error(
+            "[lead] task create non-OK",
+            ownerId,
+            res.status,
+            await res.text()
+          );
+        }
+      } catch (err) {
+        console.error("[lead] task create threw", ownerId, err);
+      }
+    })
+  );
 }
 
 async function sendToAirtable(
@@ -189,8 +268,15 @@ export async function POST(req: Request) {
   const payload: LeadPayload = { name, email, phone, pageUri };
 
   // HubSpot first so Airtable can log its status.
-  const hubspotStatus = await sendToHubSpot(payload);
-  const airtable = await sendToAirtable(payload, hubspotStatus);
+  const hubspot = await sendToHubSpot(payload);
+
+  // Instant notification: ping the owners the moment the contact exists.
+  const token = process.env.HUBSPOT_TOKEN;
+  if (token && hubspot.contactId) {
+    await notifyOwners(token, hubspot.contactId, payload);
+  }
+
+  const airtable = await sendToAirtable(payload, hubspot.status);
 
   if (!airtable.ok) {
     return bad(502, airtable.error || "Could not save your details.", "SINKS_FAILED");
@@ -198,6 +284,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    sinks: { airtable: "ok", hubspot: hubspotStatus },
+    sinks: { airtable: "ok", hubspot: hubspot.status },
   });
 }
