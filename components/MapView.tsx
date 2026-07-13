@@ -26,6 +26,7 @@ import LegendFilter from "./LegendFilter";
 import PropertyCard from "./PropertyCard";
 import PropertyList, { featureKey, SortKey } from "./PropertyList";
 import HeaderBar from "./HeaderBar";
+import MapSearch from "./MapSearch";
 import { computeStats, median } from "@/lib/stats";
 import {
   buildRevparIndex,
@@ -1216,7 +1217,9 @@ export default function MapView() {
       feats = feats.filter(
         (f) =>
           f.properties.name.toLowerCase().includes(q) ||
-          f.properties.city.toLowerCase().includes(q)
+          f.properties.city.toLowerCase().includes(q) ||
+          f.properties.address.toLowerCase().includes(q) ||
+          (f.properties.zip ?? "").toString().toLowerCase().includes(q)
       );
     } else if (bounds) {
       const [w, s, e, n] = bounds;
@@ -1803,6 +1806,10 @@ export default function MapView() {
           }
         />
       </div>
+
+      {!svOpen && data && (
+        <MapSearch features={data.features} onSelect={flyToFeature} />
+      )}
 
       <div className={`print:hidden ${svOpen ? "hidden" : ""}`}>
         <ToolRail
