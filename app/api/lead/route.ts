@@ -278,12 +278,25 @@ export async function POST(req: Request) {
 
   const airtable = await sendToAirtable(payload, hubspot.status);
 
+  // Fail-open: a visitor is NEVER blocked by a sink being unconfigured or
+  // erroring. Record to whatever sinks exist, always log the lead so it
+  // survives in the platform logs, and always return success so the gate opens.
+  // Sink statuses are reported for observability only.
+  const airtableStatus = airtable.ok
+    ? "ok"
+    : airtable.error === "Airtable not configured."
+      ? "skipped"
+      : "error";
   if (!airtable.ok) {
-    return bad(502, airtable.error || "Could not save your details.", "SINKS_FAILED");
+    console.warn(`[lead] airtable ${airtableStatus}:`, airtable.error);
   }
+  console.log(
+    `[lead] captured name="${name}" email="${email}" phone="${phone}" ` +
+      `airtable=${airtableStatus} hubspot=${hubspot.status}`
+  );
 
   return NextResponse.json({
     ok: true,
-    sinks: { airtable: "ok", hubspot: hubspot.status },
+    sinks: { airtable: airtableStatus, hubspot: hubspot.status },
   });
 }

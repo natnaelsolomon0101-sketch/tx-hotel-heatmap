@@ -71,8 +71,13 @@ export default function LeadGate() {
     if (!agree) return setError("Please acknowledge the notice to continue.");
 
     setSubmitting(true);
+
+    // Best-effort capture, fail-open access. We try to record the lead, but a
+    // backend hiccup (Airtable/HubSpot unconfigured or down) must NEVER block a
+    // visitor or surface a config error — after client-side validation passes,
+    // the visitor always gets in.
     try {
-      const res = await fetch("/api/lead", {
+      await fetch("/api/lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -83,36 +88,32 @@ export default function LeadGate() {
             typeof window !== "undefined" ? window.location.href : undefined,
         }),
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || "Something went wrong. Please try again.");
-      }
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ email, at: new Date().toISOString() })
-        );
-      } catch {
-        /* storage disabled — gate will re-show next visit, acceptable */
-      }
-      // Tell HubSpot who this visitor is so the anonymous tracking session (and
-      // future pageviews) stitch to the contact we just created server-side.
-      try {
-        const w = window as unknown as { _hsq?: unknown[][] };
-        const hsq = (w._hsq = w._hsq || []);
-        hsq.push(["identify", { email, firstname: name }]);
-        hsq.push(["trackPageView"]);
-      } catch {
-        /* tracking script not loaded yet — non-fatal */
-      }
-      // Registration already fired a "new lead" notification; suppress the
-      // "active session" ping for this first visit so owners aren't double-pinged.
-      markActivityBaseline();
-      setOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Please try again.");
-      setSubmitting(false);
+    } catch {
+      /* network/backend issue — non-fatal, still let the visitor in */
     }
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ email, at: new Date().toISOString() })
+      );
+    } catch {
+      /* storage disabled — gate will re-show next visit, acceptable */
+    }
+    // Tell HubSpot who this visitor is so the anonymous tracking session (and
+    // future pageviews) stitch to the contact we just created server-side.
+    try {
+      const w = window as unknown as { _hsq?: unknown[][] };
+      const hsq = (w._hsq = w._hsq || []);
+      hsq.push(["identify", { email, firstname: name }]);
+      hsq.push(["trackPageView"]);
+    } catch {
+      /* tracking script not loaded yet — non-fatal */
+    }
+    // Registration already fired a "new lead" notification; suppress the
+    // "active session" ping for this first visit so owners aren't double-pinged.
+    markActivityBaseline();
+    setOpen(false);
   }
 
   return (
