@@ -1,5 +1,5 @@
 /**
- * build-history.mjs — compute correct RevPAR for public/hotels.geojson from the
+ * build-history.mjs — compute correct RevPAR for data/hotels.full.geojson from the
  * Texas Comptroller period files in data/periods/.
  *
  *   node scripts/build-history.mjs
@@ -36,7 +36,7 @@
  * are added first by scripts/add-new-hotels.mjs.
  *
  * Writes (in place):
- *   public/hotels.geojson      — sets properties.revpar = T12 RevPAR (per night),
+ *   data/hotels.full.geojson   — sets properties.revpar = T12 RevPAR (per night),
  *                                properties.lastMonthRevpar, properties.lastMonth,
  *                                properties.revenue = latest-month revenue, and
  *                                re-buckets by the T12 RevPAR distribution.
@@ -52,7 +52,7 @@ import { parse } from "csv-parse/sync";
 import fs from "node:fs";
 
 const PERIOD_DIR = "data/periods";
-const GEOJSON = "public/hotels.geojson";
+const GEOJSON = "data/hotels.full.geojson";
 // Trend/T12 live in a separate file loaded on-demand (only when a card opens),
 // so the map's initial geojson stays lean. Keyed by the feature's `id`.
 const HISTORY = "public/hotel-history.json";

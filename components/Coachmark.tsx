@@ -68,7 +68,7 @@ export default function Coachmark() {
   if (!open) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex justify-center px-2 md:bottom-6">
+    <div className="pointer-events-none absolute inset-x-0 bottom-11 z-30 flex justify-center px-2 md:bottom-6">
       <div
         role="dialog"
         aria-modal="true"

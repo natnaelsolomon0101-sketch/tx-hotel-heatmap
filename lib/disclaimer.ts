@@ -4,7 +4,7 @@
  * Text is verbatim from the approved legal copy; only [App Name] is filled in.
  */
 
-export const APP_NAME = "TX Hotel RevPAR Intelligence";
+export const APP_NAME = "Texas Hotel Data AI";
 
 /** Block 1 — persistent footer (every screen). */
 export const FOOTER_DISCLOSURE =
@@ -70,5 +70,31 @@ export const ABOUT_SECTIONS: { heading: string; body: string }[] = [
       "Hotel brand names, marks, and logos are the property of their respective " +
       "owners and are used for identification only; their appearance does not " +
       "imply any affiliation or endorsement.",
+  },
+  {
+    heading: "Questions? Buying, selling, or financing?",
+    body:
+      `${APP_NAME} is powered by Matthews Real Estate Investment Services. If ` +
+      "you have questions about the data, or you're looking to buy, sell, or " +
+      "finance hotels in Texas, contact Luke Thompson at (512) 771-1860 / " +
+      "Luke.Thompson@matthews.com, or Nate Solomon at (512) 839-6999 / " +
+      "Nate.Solomon@matthews.com.",
+  },
+];
+
+/** Contact line shown in the site footer and the print brief. */
+export const CONTACT_PROMPT = "Buying, selling, or financing Texas hotels?";
+export const CONTACTS = [
+  {
+    name: "Luke Thompson",
+    phone: "(512) 771-1860",
+    tel: "+15127711860",
+    email: "Luke.Thompson@matthews.com",
+  },
+  {
+    name: "Nate Solomon",
+    phone: "(512) 839-6999",
+    tel: "+15128396999",
+    email: "Nate.Solomon@matthews.com",
   },
 ];

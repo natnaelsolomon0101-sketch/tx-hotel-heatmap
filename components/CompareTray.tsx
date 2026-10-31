@@ -144,7 +144,7 @@ function CompareTray({
   if (items.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex justify-center px-2 print:hidden md:bottom-4">
+    <div className="pointer-events-none absolute inset-x-0 bottom-11 z-30 flex justify-center px-2 print:hidden md:bottom-4">
       <div
         role="region"
         aria-label="Hotel comparison"

@@ -1,6 +1,6 @@
 /**
  * add-new-hotels.mjs — append hotels that first appear in the newest
- * Comptroller month files to public/hotels.geojson, without touching any
+ * Comptroller month files to data/hotels.full.geojson, without touching any
  * existing feature.
  *
  *   node scripts/add-new-hotels.mjs            # add + geocode
@@ -46,7 +46,7 @@ import { parse } from "csv-parse/sync";
 import fs from "node:fs";
 
 const PERIOD_DIR = "data/periods";
-const GEOJSON = "public/hotels.geojson";
+const GEOJSON = "data/hotels.full.geojson";
 const REPORT = "data/update-report.json";
 const DRY = process.argv.includes("--dry-run");
 

@@ -171,7 +171,7 @@ function PropertyCard({
   // conditionally so unenriched properties never show empty badges/rows.
   const hotelClass = hotel.hotelClass || hotel.scale || null;
   const location = [hotel.submarket, hotel.market].filter(Boolean).join(" · ");
-  const hasDetails = Boolean(hotel.ownerName || location);
+  const hasDetails = Boolean(location);
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
@@ -410,14 +410,6 @@ function PropertyCard({
 
         {hasDetails && (
           <dl className="mt-2.5 space-y-1 rounded-lg bg-muted px-2.5 py-2 ring-1 ring-border">
-            {hotel.ownerName && (
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="label-overline shrink-0">Owner</dt>
-                <dd className="min-w-0 truncate text-meta font-medium text-foreground">
-                  {hotel.ownerName}
-                </dd>
-              </div>
-            )}
             {location && (
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="label-overline shrink-0">Submarket</dt>

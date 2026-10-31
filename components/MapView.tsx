@@ -881,6 +881,99 @@ function HeatLayer({
 }
 
 // ---------------------------------------------------------------------------
+// Texas outline: a light green tint over everything outside the state, plus a
+// thin dark border (public/texas-boundary.json). Sits under the heatmap and
+// the drawn area shapes; the deck.gl pins draw above all map layers.
+// ---------------------------------------------------------------------------
+const TX_MASK = "texas-mask";
+const TX_LINE = "texas-outline";
+// Outer ring for the tint: well past the map's useful extent around Texas.
+const MASK_OUTER: [number, number][] = [
+  [-170, 5],
+  [-50, 5],
+  [-50, 74],
+  [-170, 74],
+  [-170, 5],
+];
+
+function TexasMask() {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    let cancelled = false;
+    let cancelReady = () => {};
+    (async () => {
+      try {
+        const r = await fetch("/texas-boundary.json");
+        if (!r.ok) return;
+        const tx = (await r.json()) as {
+          geometry: { coordinates: [number, number][][] };
+        };
+        if (cancelled) return;
+        const ring = tx.geometry.coordinates[0];
+        cancelReady = whenStyleReady(map, () => {
+          if (cancelled || map.getSource(TX_MASK)) return;
+          map.addSource(TX_MASK, {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: { type: "Polygon", coordinates: [MASK_OUTER, ring] },
+            },
+          });
+          map.addSource(TX_LINE, {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: { type: "LineString", coordinates: [...ring, ring[0]] },
+            },
+          });
+          const before = map.getLayer(HEAT_SRC) ? HEAT_SRC : firstAreaLayerId(map);
+          map.addLayer(
+            {
+              id: TX_MASK,
+              type: "fill",
+              source: TX_MASK,
+              paint: { "fill-color": "#34a853", "fill-opacity": 0.14 },
+            },
+            before
+          );
+          map.addLayer(
+            {
+              id: TX_LINE,
+              type: "line",
+              source: TX_LINE,
+              paint: {
+                "line-color": "#111827",
+                "line-opacity": 0.35,
+                "line-width": 1.5,
+              },
+            },
+            before
+          );
+        });
+      } catch {
+        /* outline is decorative; the map works without it */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      cancelReady();
+      try {
+        if (map.getLayer(TX_LINE)) map.removeLayer(TX_LINE);
+        if (map.getLayer(TX_MASK)) map.removeLayer(TX_MASK);
+        if (map.getSource(TX_LINE)) map.removeSource(TX_LINE);
+        if (map.getSource(TX_MASK)) map.removeSource(TX_MASK);
+      } catch {
+        /* map already removed */
+      }
+    };
+  }, [map]);
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Imperative bits driven by the toolbar/zoom controls + viewport tracking.
 // ---------------------------------------------------------------------------
 function MapController({
@@ -1854,6 +1947,7 @@ export default function MapView() {
             onBounds={setBounds}
             registerControls={registerControls}
           />
+          <TexasMask />
           <MarkersLayer
             features={filtered}
             selectedFeature={selected}
@@ -1983,7 +2077,7 @@ export default function MapView() {
 
       <div
         className={`absolute z-20 flex flex-col gap-2.5 print:hidden
-          inset-x-2 bottom-8 max-h-[60dvh]
+          inset-x-2 bottom-11 max-h-[60dvh]
           md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3 ${
             svOpen ? "hidden" : ""
           }`}

@@ -1,6 +1,6 @@
-# TX Hotel Heatmap
+# Texas Hotel Data AI
 
-A full-screen CRE mapping tool that plots Texas hotels by **RevPAR** (revenue per
+Powered by Matthews. A full-screen CRE mapping tool that plots Texas hotels by **RevPAR** (revenue per
 available room), built from Texas Comptroller hotel-occupancy-tax data. Hotels are
 bucketed red / yellow / gray by RevPAR percentile and rendered as clustered colored
 pins or a RevPAR-weighted density heatmap.
@@ -32,7 +32,8 @@ the footer carries "Basemap: Esri."
 ```bash
 npm install
 cp .env.local.example .env.local   # optional keys (geocoding, lead sinks)
-npm run build-data                 # generates public/hotels.geojson
+npm run build-data                 # generates data/hotels.full.geojson
+npm run publish-geojson            # writes the served public/hotels.geojson
 npm run dev                        # http://localhost:3000
 ```
 
@@ -69,8 +70,9 @@ npm run build-data
      (interpolated); pins can be ~100m–1km off.
 4. **Buckets** every hotel red / yellow / gray by RevPAR percentile across the
    portfolio (top third red, middle yellow, bottom third + no-data gray).
-5. **Writes** `public/hotels.geojson` with `name, address, rooms, revpar, adr,
-   occupancy, revenue, bucket, photo, flagged` properties.
+5. **Writes** `data/hotels.full.geojson` with `name, address, rooms, revpar, adr,
+   occupancy, revenue, bucket, photo, flagged` properties. `npm run
+   publish-geojson` copies it to `public/hotels.geojson` (see "Owner data" below).
 
 All thresholds live in a `CONFIG` object at the top of the script:
 
@@ -125,11 +127,13 @@ layout (23 fields, the `.doc` in each zip). Both scripts below read them as-is.
 #    Receipts, the column the Box history uses).
 npm run convert-sift -- ~/Downloads/HOT2606.CSV ~/Downloads/HOT2607.CSV
 
-# 2. Add hotels that are new in those months, then recompute RevPAR/history.
+# 2. Add hotels that are new in those months, recompute RevPAR/history, and
+#    publish the served public/hotels.geojson (owner fields removed).
 npm run update-data
 
 # 3. Check nothing existing was lost, and spot-check last-month RevPAR.
-node scripts/validate-update.mjs <previous hotels.geojson>
+git show HEAD:data/hotels.full.geojson > /tmp/before.geojson
+node scripts/validate-update.mjs /tmp/before.geojson
 
 # Optional: the same months in the Box archive layout
 # ("Texan Hotel Analytics/2026/2026-JUN HOTEL ANALYTICS.csv").
@@ -175,6 +179,18 @@ npm run sift-to-box -- ~/Downloads/HOT2606.CSV --out <folder>
 - `data/hotels.csv` and `data/geocache.json` are git-ignored (large / owner PII).
   The generated `public/hotels.geojson` **is** committed so Vercel renders without
   needing a geocoding step at deploy time.
+
+### Owner data
+
+- The pipeline scripts read and write `data/hotels.full.geojson`, which keeps
+  every field, including `owner`, `ownerName`, `ownerContact` and `ownerPhone`
+  (used to match new filers to existing hotels). Nothing under `data/` is
+  served.
+- `npm run publish-geojson` writes `public/hotels.geojson`, the file the site
+  serves, with every property whose name contains "owner" removed.
+- `npm run build` runs `publish-geojson --check` first (`prebuild`). The build
+  fails if the served file has any owner field or is out of sync with
+  `data/hotels.full.geojson`.
 
 ## Deploy (Vercel)
 

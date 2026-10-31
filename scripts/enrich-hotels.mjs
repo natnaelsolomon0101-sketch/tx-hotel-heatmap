@@ -1,10 +1,10 @@
 /**
- * enrich-hotels.mjs — join the branded-STR source onto public/hotels.geojson.
+ * enrich-hotels.mjs — join the branded-STR source onto data/hotels.full.geojson.
  *
  *   node scripts/enrich-hotels.mjs
  *
  * The Comptroller pipeline (build-data -> build-history) owns RevPAR/history and
- * writes public/hotels.geojson with plain taxpayer identity. This script runs
+ * writes data/hotels.full.geojson with plain taxpayer identity. This script runs
  * LAST and layers on the ONLY source of Brand / Parent / Market / Submarket /
  * Hotel Class / Scale / ownership: data/box/texas-hospitality.tsv (771 branded
  * STR hotels). It:
@@ -17,7 +17,7 @@
  *      data/geocache.google.json) and APPENDS them as new features with fresh
  *      ids, revpar:null, bucket:'gray', flagged:true, source:'str'.
  *
- * Writes public/hotels.geojson (in place) + public/enrichment-report.json.
+ * Writes data/hotels.full.geojson (in place) + public/enrichment-report.json.
  * RevPAR and hotel-history.json are untouched, so the final geojson carries
  * BOTH revpar (from build-history) AND brand/submarket (from here).
  */
@@ -29,7 +29,7 @@ dotenv.config({ path: ".env.local" });
 dotenv.config();
 
 const TSV = "data/box/texas-hospitality.tsv";
-const GEOJSON = "public/hotels.geojson";
+const GEOJSON = "data/hotels.full.geojson";
 const REPORT = "public/enrichment-report.json";
 const GEOCACHE = "data/geocache.google.json";
 

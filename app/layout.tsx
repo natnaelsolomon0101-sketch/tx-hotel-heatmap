@@ -18,19 +18,19 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const geistMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "TX Hotel RevPAR Intelligence",
+  title: "Texas Hotel Data AI",
   description:
     "Interactive RevPAR map of 10,000+ Texas hotels, built from Texas Comptroller hotel occupancy tax data. Filter, search, and export by market and performance.",
-  applicationName: "TX Hotel RevPAR Intelligence",
+  applicationName: "Texas Hotel Data AI",
   openGraph: {
-    title: "TX Hotel RevPAR Intelligence",
+    title: "Texas Hotel Data AI",
     description:
       "Interactive RevPAR map of 10,000+ Texas hotels. Filter, search, and export by market and performance.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "TX Hotel RevPAR Intelligence",
+    title: "Texas Hotel Data AI",
     description:
       "Interactive RevPAR map of 10,000+ Texas hotels. Filter, search, and export.",
   },

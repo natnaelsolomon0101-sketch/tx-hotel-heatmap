@@ -1,8 +1,8 @@
 /**
- * validate-update.mjs — check a refreshed public/hotels.geojson (+ history)
+ * validate-update.mjs — check a refreshed data/hotels.full.geojson (+ history)
  * against the version it replaced, before committing.
  *
- *   git show HEAD:public/hotels.geojson > /tmp/before.geojson
+ *   git show HEAD:data/hotels.full.geojson > /tmp/before.geojson
  *   node scripts/validate-update.mjs /tmp/before.geojson
  *
  * Fails (exit 1) if any existing feature lost its id, name, owner, brand
@@ -19,7 +19,7 @@ if (!beforePath) {
   process.exit(1);
 }
 const before = JSON.parse(fs.readFileSync(beforePath, "utf8"));
-const after = JSON.parse(fs.readFileSync("public/hotels.geojson", "utf8"));
+const after = JSON.parse(fs.readFileSync("data/hotels.full.geojson", "utf8"));
 const history = JSON.parse(fs.readFileSync("public/hotel-history.json", "utf8"));
 
 const KEEP = ["name", "address", "city", "zip", "rooms", "owner", "brand", "parentCompany", "market", "submarket", "hotelClass", "scale", "ownerName", "ownerContact", "ownerPhone", "yearBuilt", "source"];

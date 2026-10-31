@@ -3,7 +3,7 @@
  *
  * Reads the Texas Comptroller hotel-occupancy-tax export (data/hotels.csv),
  * computes/normalizes RevPAR, geocodes each hotel, buckets it by RevPAR
- * percentile, and writes public/hotels.geojson for the map to render.
+ * percentile, and writes data/hotels.full.geojson (published to public/ by publish-geojson.mjs).
  *
  *   npm run build-data                 # geocode via Mapbox if a token is set, else Census
  *   GEOCODER=census npm run build-data # force the free, no-key US Census batch geocoder
@@ -27,7 +27,7 @@ dotenv.config();
 // ---------------------------------------------------------------------------
 const CONFIG = {
   inputCsv: "data/hotels.csv",
-  outputGeojson: "public/hotels.geojson",
+  outputGeojson: "data/hotels.full.geojson",
   geocacheFile: "data/geocache.json",
 
   // Only keep hotels physically located in this state (set to null to keep all).

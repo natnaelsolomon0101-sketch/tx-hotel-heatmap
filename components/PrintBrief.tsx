@@ -3,7 +3,12 @@
 import { BUCKET_COLORS, BUCKET_LABELS, Bucket, HotelFeature } from "@/lib/types";
 import { PortfolioStats, fmtMoney, fmtMarket } from "@/lib/stats";
 import { titleCase } from "@/lib/format";
-import { FOOTER_DISCLOSURE } from "@/lib/disclaimer";
+import {
+  APP_NAME,
+  CONTACT_PROMPT,
+  CONTACTS,
+  FOOTER_DISCLOSURE,
+} from "@/lib/disclaimer";
 
 type PrintBriefProps = {
   stats: PortfolioStats;
@@ -149,9 +154,15 @@ export default function PrintBrief({ stats, topRows, period }: PrintBriefProps) 
       </section>
 
       <footer className="mt-6 border-t border-gray-200 pt-2 text-[10px] text-gray-400">
-        TX Hotel RevPAR Intelligence &middot; RevPAR = trailing-12-month (T12)
-        revenue ÷ rooms ÷ 365, per night. Figures reflect the current map filter
-        and viewport at time of generation.
+        <span className="block font-medium text-gray-600">
+          {APP_NAME} &middot; Powered by MATTHEWS &middot; {CONTACT_PROMPT}{" "}
+          {CONTACTS.map((c) => `${c.name} · ${c.phone} · ${c.email}`).join(" · ")}
+        </span>
+        <span className="mt-1 block">
+          RevPAR = trailing-12-month (T12) revenue ÷ rooms ÷ 365, per night.
+          Figures reflect the current map filter and viewport at time of
+          generation.
+        </span>
         <span className="mt-1 block">{FOOTER_DISCLOSURE}</span>
       </footer>
     </div>

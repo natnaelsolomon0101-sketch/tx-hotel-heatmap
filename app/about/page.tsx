@@ -4,8 +4,7 @@ import { APP_NAME, ABOUT_SECTIONS, ONE_LINE_CREDIT } from "@/lib/disclaimer";
 
 export const metadata: Metadata = {
   title: `About the Data · ${APP_NAME}`,
-  description:
-    "How TX Hotel RevPAR Intelligence sources and derives its figures, and the disclaimers that apply.",
+  description: `How ${APP_NAME} sources and derives its figures, and the disclaimers that apply.`,
 };
 
 export default function AboutDataPage() {

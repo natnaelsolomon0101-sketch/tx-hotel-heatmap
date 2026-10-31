@@ -40,9 +40,8 @@ export interface HotelProperties {
   submarket?: string | null;
   hotelClass?: string | null;
   scale?: string | null;
-  ownerName?: string | null;
-  ownerContact?: string | null;
-  ownerPhone?: string | null;
+  // Owner fields stay in data/hotels.full.geojson (a build input) and are
+  // stripped from the served file by scripts/publish-geojson.mjs.
   yearBuilt?: number | null;
   source?: "comptroller" | "str";
 }

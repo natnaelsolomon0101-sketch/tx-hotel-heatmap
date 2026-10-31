@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/publish-geojson.mjs --check",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,8 +13,9 @@
     "convert-sift": "node scripts/convert-sift.mjs",
     "sift-to-box": "node scripts/sift-to-box.mjs",
     "add-new-hotels": "node scripts/add-new-hotels.mjs",
-    "update-data": "node scripts/add-new-hotels.mjs && node scripts/build-history.mjs",
-    "test": "tsx --test lib/*.test.ts"
+    "update-data": "node scripts/add-new-hotels.mjs && node scripts/build-history.mjs && node scripts/publish-geojson.mjs",
+    "test": "tsx --test lib/*.test.ts",
+    "publish-geojson": "node scripts/publish-geojson.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "^9.3.4",
