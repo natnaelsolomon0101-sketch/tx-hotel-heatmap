@@ -104,7 +104,46 @@ Comptroller files in `data/periods/` and writes two **per-night** figures:
   days-in-month (`properties.lastMonthRevpar`).
 
 Run `build-data` first (geocoding + base geojson), then `build-history` to lay
-the correct RevPAR on top.
+the correct RevPAR on top. **Don't re-run `build-data` on the live map:** it
+rebuilds every feature from scratch and would drop the hand-fixed hotel names,
+owner/brand enrichment and feature ids. Use the monthly refresh below.
+
+### Monthly refresh (new Comptroller months)
+
+Property-level hotel tax receipts are not on a public site (Tax Code §156.155).
+They are downloaded from the Comptroller's SIFT site
+(https://data-secure.comptroller.texas.gov, login required).
+
+```bash
+# 1. Convert the SIFT download into data/periods/YYYY-MON.csv
+#    (save .xlsx as CSV first). It prints the column mapping it used and, when
+#    the download overlaps a month already on file, which receipts column
+#    matches it to the dollar.
+npm run convert-sift -- ~/Downloads/<sift-download>.csv
+
+# 2. Add hotels that are new in those months, then recompute RevPAR/history.
+npm run update-data
+```
+
+- **Periods are discovered from the files.** T12 = the last four complete,
+  consecutive quarters on file; "last month" = the newest month file; the
+  header's data month follows the data. No constants to edit.
+- **Existing hotels are never renumbered or rewritten.** Ids (which history,
+  watchlists and shared links key on), cleaned names, `owner`, brand
+  enrichment and coordinates carry forward. Hotels are matched by normalized
+  address + city + ZIP, the key the map was built on.
+- **New hotels** (`add-new-hotels`): > 10 rooms, Texas, not a tax rollup, not
+  already on the map. Placed from the local OSM hotel gazetteer
+  (`OSM_GAZETTEER`, default `~/hoteladdr/osm/TX.json`) when a lodging POI
+  with a matching name is near the Census address point, else from an exact
+  US Census match. Anything less certain is left off the map and listed in
+  `data/update-report.json` with the reason. Owner-entity names get the same
+  cleanup as the July fix (`... DBA MOTEL 6` becomes `MOTEL 6`; the entity is
+  kept in `owner`). A new hotel shows gray until it has four quarters for T12.
+- A hotel with no filing in the newest month keeps its pin and T12; its
+  last-month figures are blank rather than stale. When the newest month closes
+  a quarter, quarterly filers' whole-quarter totals are kept out of last-month
+  figures.
 
 ### Notes on this dataset
 
@@ -113,7 +152,7 @@ the correct RevPAR on top.
   always divides by 90 days. `build-history` ignores that column and recomputes
   RevPAR per night from the raw revenue on the correct day count.
 - The export has **no ADR, occupancy, lat/lng, or photo** columns — those render
-  as "—"/no-photo. The pipeline still supports them for richer exports.
+  as "n/a"/no-photo. The pipeline still supports them for richer exports.
 - `data/hotels.csv` and `data/geocache.json` are git-ignored (large / owner PII).
   The generated `public/hotels.geojson` **is** committed so Vercel renders without
   needing a geocoding step at deploy time.

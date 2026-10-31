@@ -129,6 +129,8 @@ const FOCUS_ZOOM = 13;
 const EXPAND_MAX_ZOOM = 15;
 const LIST_LIMIT = 200;
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
+// Fallback label until the data loads; the real one comes from the data
+// (properties.lastMonth, written by scripts/build-history.mjs).
 const DATA_PERIOD = "May 2026";
 
 const SORTERS: Record<SortKey, (a: HotelFeature, b: HotelFeature) => number> = {
@@ -955,6 +957,18 @@ export default function MapView() {
   ).current;
 
   const [data, setData] = useState<HotelCollection | null>(null);
+  // Latest reported month in the loaded data (most common lastMonth label), so
+  // a data refresh updates the header and print brief without a code change.
+  const dataPeriod = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const f of data?.features ?? []) {
+      const l = f.properties.lastMonth;
+      if (l) counts.set(l, (counts.get(l) ?? 0) + 1);
+    }
+    let best: string | null = null;
+    for (const [l, n] of counts) if (best == null || n > (counts.get(best) ?? 0)) best = l;
+    return best ?? DATA_PERIOD;
+  }, [data]);
   const [dataError, setDataError] = useState<string | null>(null);
   // Trend/T12 live in a separate file so the map's geojson stays lean; fetched
   // lazily after mount and keyed by feature id. Null until it resolves.
@@ -1887,7 +1901,7 @@ export default function MapView() {
       <div className={`print:hidden ${svOpen ? "hidden" : ""}`}>
         <HeaderBar
           stats={stats}
-          period={DATA_PERIOD}
+          period={dataPeriod}
           dataAge={dataAge}
           refreshState={refreshState}
           onRefresh={refreshData}
@@ -2267,7 +2281,7 @@ export default function MapView() {
       )}
 
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <PrintBrief stats={stats} topRows={briefRows} period={DATA_PERIOD} />
+      <PrintBrief stats={stats} topRows={briefRows} period={dataPeriod} />
       {!svOpen && <Coachmark />}
     </div>
   );

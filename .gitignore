@@ -36,3 +36,4 @@ yarn-error.log*
 .vercel
 .gstack/
 /data/periods/
+/data/update-report.json

@@ -7,12 +7,13 @@
  * Two RevPAR figures, BOTH expressed per available room-night:
  *
  *   T12 RevPAR   = trailing-12-month revenue / rooms / 365
- *                  (last four COMPLETE quarters: 2025Q2 + Q3 + Q4 + 2026Q1).
+ *                  (the last four COMPLETE consecutive quarters on file, e.g.
+ *                  2025Q2 + Q3 + Q4 + 2026Q1; 366 days if they span a Feb 29).
  *                  This is the headline metric the heatmap buckets / filters /
  *                  sorts on (properties.revpar).
  *
  *   Last-month   = latest reported month's revenue / rooms / days-in-that-month
- *                  (2026-MAY → /31). properties.lastMonthRevpar.
+ *                  (e.g. 2026-MAY -> /31). properties.lastMonthRevpar.
  *
  * Why this script owns RevPAR: the source Comptroller files report revenue PER
  * PERIOD — a single MONTH for the monthly files, a QUARTER for the quarterly
@@ -20,13 +21,19 @@
  * over 90 days understated monthly RevPAR ~3x. We recompute on the correct
  * day-count basis from the raw revenue.
  *
- * Reads (data/periods/, gitignored, copied from Box "Texan Hotel Analytics"):
+ * Reads (data/periods/, gitignored, copied from Box "Texan Hotel Analytics"
+ * or written by scripts/convert-sift.mjs from a Comptroller SIFT download):
  *   2023.csv                 — variable filings per hotel within 2023 → summed to ANNUAL
  *   2024Q2..2025Q4.csv       — one row per hotel per quarter (pre-aggregated)
- *   2026-JAN..2026-MAY.csv   — one row per hotel per month → rolled into 2026Q1 / 2026Q2
+ *   2026-JAN.csv, ...        — one row per hotel per month → rolled into quarters
+ * The period axis, T12 window and "last month" are derived from whichever
+ * files are present (see the period discovery block below), so adding a new
+ * month is: drop the file in, re-run.
  *
  * Hotels are matched to existing geojson features by normalized
  * Location Address + City + 5-digit Zip (the same key the map was built on).
+ * Feature ids are never renumbered. Hotels that are new in the latest files
+ * are added first by scripts/add-new-hotels.mjs.
  *
  * Writes (in place):
  *   public/hotels.geojson      — sets properties.revpar = T12 RevPAR (per night),
@@ -54,32 +61,94 @@ const HISTORY = "public/hotel-history.json";
 const MIN_ROOMS = 2; // 1-room filings are placeholders, not real room counts
 const MAX_REVPAR = 2000; // $/night/room ceiling — rejects data errors / bad room counts
 
-// Quarter axis, oldest → newest. 2023 is a single annual baseline point.
-const QUARTERS = [
-  "2023",
-  "2024Q2", "2024Q3", "2024Q4",
-  "2025Q1", "2025Q2", "2025Q3", "2025Q4",
-  "2026Q1", "2026Q2",
-];
-// Months that roll up into 2026 quarters.
-const MONTH_TO_Q = {
-  "2026-JAN": "2026Q1", "2026-FEB": "2026Q1", "2026-MAR": "2026Q1",
-  "2026-APRIL": "2026Q2", "2026-MAY": "2026Q2", // 2026Q2 is partial (no June yet)
-};
-// Actual calendar days in each reporting period — the divisor for per-night
-// RevPAR. (2026 is not a leap year; Feb = 28.)
-const DAYS_IN = {
-  "2023": 365,
-  "2024Q2": 91, "2024Q3": 92, "2024Q4": 92, // Apr–Jun, Jul–Sep, Oct–Dec
-  "2025Q1": 90, "2025Q2": 91, "2025Q3": 92, "2025Q4": 92,
-  "2026Q1": 90, "2026Q2": 61, // 2026Q2 = Apr (30) + May (31) so far
-};
-// T12 = the last four COMPLETE quarters (2026Q2 is partial, excluded).
-// Their day counts sum to exactly 365, so T12 RevPAR = T12 revenue / rooms / 365.
-const T12_QUARTERS = ["2025Q2", "2025Q3", "2025Q4", "2026Q1"];
+// ---------------------------------------------------------------------------
+// Periods are discovered from the files present in data/periods/, so a data
+// refresh is "drop the new month files in, re-run". File names:
+//   YYYY.csv        annual baseline (variable filings summed per hotel)
+//   YYYYQn.csv      one quarter, pre-aggregated
+//   YYYY-MON*.csv   one reporting month (JAN, FEB, MAR, APR or APRIL, ...).
+//                   A month file holds monthly filers for that month PLUS
+//                   quarterly filers whose quarter ends that month, so months
+//                   roll up into their calendar quarter.
+// A month-built quarter is complete only when all three of its months are
+// present; otherwise it is a partial trend point (on the same per-night basis).
+// ---------------------------------------------------------------------------
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const MONTH_LABEL = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const isLeap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+const daysInMonth = (y, m) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); // m: 0-11
+const qOfMonth = (y, m) => `${y}Q${Math.floor(m / 3) + 1}`;
+const daysInQuarter = (y, q) => [0, 1, 2].reduce((s, i) => s + daysInMonth(y, (q - 1) * 3 + i), 0);
 
-// Latest reported single month — drives "last month" RevPAR.
-const LAST_MONTH = { file: "2026-MAY", label: "May 2026", days: 31 };
+const annualFiles = []; // { file, label, days }
+const quarterFiles = []; // { file, q, y, n }
+const monthFiles = []; // { file, y, m, q }
+for (const file of fs.readdirSync(PERIOD_DIR).filter((f) => f.endsWith(".csv")).sort()) {
+  let mm;
+  if ((mm = file.match(/^(\d{4})\.csv$/))) {
+    const y = Number(mm[1]);
+    annualFiles.push({ file, label: String(y), days: isLeap(y) ? 366 : 365 });
+  } else if ((mm = file.match(/^(\d{4})Q([1-4])\.csv$/))) {
+    quarterFiles.push({ file, q: `${mm[1]}Q${mm[2]}`, y: Number(mm[1]), n: Number(mm[2]) });
+  } else if ((mm = file.match(/^(\d{4})-([A-Za-z]{3})[A-Za-z]*\.csv$/))) {
+    const y = Number(mm[1]);
+    const m = MONTHS.indexOf(mm[2].toUpperCase());
+    if (m < 0) throw new Error(`Unrecognized month in ${file}`);
+    monthFiles.push({ file, y, m, q: qOfMonth(y, m) });
+  } else {
+    console.warn(`  (skipping unrecognized period file ${file})`);
+  }
+}
+monthFiles.sort((a, b) => a.y - b.y || a.m - b.m);
+if (!monthFiles.length) throw new Error(`No monthly files (YYYY-MON.csv) in ${PERIOD_DIR}`);
+
+// Quarter axis, oldest -> newest. Annual baselines come first.
+const quarterInfo = new Map(); // q -> { days, partial, months:Set }
+for (const { q, y, n } of quarterFiles) quarterInfo.set(q, { y, n, days: daysInQuarter(y, n), partial: false, fromFile: true });
+for (const { q, y, m } of monthFiles) {
+  if (quarterInfo.get(q)?.fromFile) throw new Error(`${q} has both a quarterly file and month files`);
+  const info = quarterInfo.get(q) ?? { y, n: Math.floor(m / 3) + 1, days: 0, months: new Set() };
+  info.months.add(m);
+  info.days += daysInMonth(y, m);
+  quarterInfo.set(q, info);
+}
+for (const info of quarterInfo.values()) if (info.months) info.partial = info.months.size < 3;
+const sortedQuarters = [...quarterInfo.keys()].sort();
+const QUARTERS = [...annualFiles.map((a) => a.label), ...sortedQuarters];
+// Actual calendar days in each reporting period: the per-night divisor.
+const DAYS_IN = Object.fromEntries([
+  ...annualFiles.map((a) => [a.label, a.days]),
+  ...sortedQuarters.map((q) => [q, quarterInfo.get(q).days]),
+]);
+const PARTIAL = new Set(sortedQuarters.filter((q) => quarterInfo.get(q).partial));
+const ANNUAL = new Set(annualFiles.map((a) => a.label));
+
+// T12 = the last four COMPLETE, consecutive quarters. Their day counts sum to
+// 365 (366 across a Feb 29), the divisor for T12 RevPAR.
+const complete = sortedQuarters.filter((q) => !PARTIAL.has(q));
+const T12_QUARTERS = complete.slice(-4);
+{
+  const idx = (q) => Number(q.slice(0, 4)) * 4 + Number(q.slice(5)) - 1;
+  const ok = T12_QUARTERS.length === 4 && T12_QUARTERS.every((q, i) => i === 0 || idx(q) === idx(T12_QUARTERS[i - 1]) + 1);
+  if (!ok) throw new Error(`T12 needs 4 consecutive complete quarters; have ${T12_QUARTERS.join(", ")}`);
+}
+const T12_DAYS = T12_QUARTERS.reduce((s, q) => s + DAYS_IN[q], 0);
+
+// Latest reported single month: drives "last month" RevPAR.
+const lm = monthFiles[monthFiles.length - 1];
+const LAST_MONTH = {
+  file: lm.file,
+  label: `${MONTH_LABEL[lm.m]} ${lm.y}`,
+  days: daysInMonth(lm.y, lm.m),
+  // When the latest month closes a quarter, its file also carries quarterly
+  // filers' whole-quarter totals. Those are not one month of revenue, so they
+  // get no last-month figure. A quarterly filer = appears in the quarter-end
+  // month but in neither earlier month of that quarter.
+  quarterEnd: lm.m % 3 === 2,
+  priorMonthFiles: monthFiles.filter((f) => f.q === lm.q && f.m < lm.m).map((f) => f.file),
+};
+console.log(`Periods: ${QUARTERS.join(" ")}`);
+console.log(`  partial: ${[...PARTIAL].join(" ") || "none"}   T12: ${T12_QUARTERS.join(" + ")} (${T12_DAYS} days)   last month: ${LAST_MONTH.label}`);
 
 const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const zip5 = (s) => String(s ?? "").trim().slice(0, 5);
@@ -110,27 +179,36 @@ function addRevenue(hotelKey, quarter, revenue) {
 const revLastMonth = new Map();
 
 console.log("Reading period files from", PERIOD_DIR, "...");
+const revOf = (r) => money(r[" Revenue "] ?? r["Revenue"]);
+const keyOfRow = (r) => keyOf(r["Location Address"], r["Location City"], r["Location Zip"]);
 
-// 2023 — sum every filing row per hotel into the annual figure.
-for (const r of loadPeriod("2023.csv")) {
-  addRevenue(keyOf(r["Location Address"], r["Location City"], r["Location Zip"]), "2023", money(r[" Revenue "] ?? r["Revenue"]));
+// Annual baselines: sum every filing row per hotel.
+for (const { file, label } of annualFiles) {
+  for (const r of loadPeriod(file)) addRevenue(keyOfRow(r), label, revOf(r));
 }
-// Quarterly files — one row per hotel; sum on the off chance a key repeats.
-for (const q of ["2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4"]) {
-  for (const r of loadPeriod(`${q}.csv`)) {
-    addRevenue(keyOf(r["Location Address"], r["Location City"], r["Location Zip"]), q, money(r[" Revenue "] ?? r["Revenue"]));
-  }
+// Quarterly files: one row per hotel; sum on the off chance a key repeats.
+for (const { file, q } of quarterFiles) {
+  for (const r of loadPeriod(file)) addRevenue(keyOfRow(r), q, revOf(r));
 }
-// 2026 monthly files — roll each month into its quarter, and capture the latest
+// Month files: roll each month into its quarter, and capture the latest
 // reported month separately for last-month RevPAR.
-for (const [file, q] of Object.entries(MONTH_TO_Q)) {
-  for (const r of loadPeriod(`${file}.csv`)) {
-    const k = keyOf(r["Location Address"], r["Location City"], r["Location Zip"]);
-    const rev = money(r[" Revenue "] ?? r["Revenue"]);
+const priorMonthKeys = new Set();
+for (const file of LAST_MONTH.priorMonthFiles) for (const r of loadPeriod(file)) priorMonthKeys.add(keyOfRow(r));
+let quarterlyFilersSkipped = 0;
+for (const { file, q } of monthFiles) {
+  for (const r of loadPeriod(file)) {
+    const k = keyOfRow(r);
+    const rev = revOf(r);
     addRevenue(k, q, rev);
-    if (file === LAST_MONTH.file) revLastMonth.set(k, (revLastMonth.get(k) ?? 0) + rev);
+    if (file !== LAST_MONTH.file) continue;
+    if (LAST_MONTH.quarterEnd && !priorMonthKeys.has(k)) {
+      quarterlyFilersSkipped++;
+      continue;
+    }
+    revLastMonth.set(k, (revLastMonth.get(k) ?? 0) + rev);
   }
 }
+if (LAST_MONTH.quarterEnd) console.log(`  ${LAST_MONTH.label} closes a quarter: ${quarterlyFilersSkipped.toLocaleString()} quarterly-filer rows kept out of last-month figures`);
 
 console.log("Hotels with any historical revenue:", revByQuarter.size.toLocaleString());
 
@@ -143,9 +221,17 @@ const historyOut = {}; // id -> { history, t12Revenue, t12Revpar, lastMonth* }
 
 let anyHist = 0, fullT12 = 0, withLastMonth = 0;
 
-geo.features.forEach((f, i) => {
+// Feature ids are permanent: history, watchlists and shared links key on them.
+// Existing ids are never renumbered; a feature without one gets the next free id.
+let nextId = geo.features.reduce((mx, f) => Math.max(mx, Number.isInteger(f.properties.id) ? f.properties.id : -1), -1) + 1;
+
+geo.features.forEach((f) => {
   const p = f.properties;
-  p.id = i;
+  if (!Number.isInteger(p.id)) p.id = nextId++;
+  const i = p.id;
+  // Rows appended by enrich-hotels.mjs (source "str") have no Comptroller
+  // filing of their own; leave them as they are.
+  if (p.source && p.source !== "comptroller") return;
   // Drop any trend fields baked in by an earlier run — they live in HISTORY now.
   delete p.history;
   delete p.t12Revenue;
@@ -163,8 +249,9 @@ geo.features.forEach((f, i) => {
     const v = lastMonthRevenue / (rooms * LAST_MONTH.days);
     if (v <= MAX_REVPAR) lastMonthRevpar = round2(v);
   }
-  // Keep properties.revenue as the latest reported month (the card labels it so).
-  if (lastMonthRevenue != null) p.revenue = lastMonthRevenue;
+  // properties.revenue is the latest reported month (the card labels it so).
+  // No filing that month -> null, never a stale figure under the new label.
+  p.revenue = lastMonthRevenue;
   p.lastMonthRevpar = lastMonthRevpar;
   p.lastMonth = LAST_MONTH.label;
   if (lastMonthRevpar != null) withLastMonth++;
@@ -192,19 +279,19 @@ geo.features.forEach((f, i) => {
     const revenue = m.get(q);
     const revpar = validRooms ? revenue / (rooms * DAYS_IN[q]) : null;
     const pt = { q, revenue: round(revenue), revpar: revpar == null ? null : round2(revpar) };
-    if (q === "2023") pt.annual = true;
-    if (q === "2026Q2") pt.partial = true;
+    if (ANNUAL.has(q)) pt.annual = true;
+    if (PARTIAL.has(q)) pt.partial = true;
     history.push(pt);
   }
 
-  // --- T12 RevPAR (trailing 12mo revenue / rooms / 365) -------------------
+  // --- T12 RevPAR (trailing 12mo revenue / rooms / T12 days) --------------
   const hasAll = T12_QUARTERS.every((q) => m.has(q));
   let t12Revenue = null, t12Revpar = null;
   if (hasAll) {
     const t12 = T12_QUARTERS.reduce((s, q) => s + m.get(q), 0);
     t12Revenue = round(t12);
     if (validRooms) {
-      const v = t12 / (rooms * 365);
+      const v = t12 / (rooms * T12_DAYS);
       if (v > 0 && v <= MAX_REVPAR) t12Revpar = round2(v);
     }
     fullT12++;
@@ -262,7 +349,7 @@ const n = geo.features.length;
 const pct = (x) => `${((100 * x) / n).toFixed(1)}%`;
 const median = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
 const avg = vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : 0;
-console.log("\n=== RevPAR recomputed (T12 = revenue / rooms / 365) ===");
+console.log(`\n=== RevPAR recomputed (T12 = revenue / rooms / ${T12_DAYS}) ===`);
 console.log(`features:               ${n.toLocaleString()}`);
 console.log(`with T12 RevPAR:        ${vals.length.toLocaleString()} (${pct(vals.length)})`);
 console.log(`with last-month RevPAR: ${withLastMonth.toLocaleString()} (${pct(withLastMonth)})`);
