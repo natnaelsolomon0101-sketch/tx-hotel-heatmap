@@ -11,7 +11,7 @@ const INT = new Intl.NumberFormat("en-US");
 
 /** Currency, no decimals. `$1,234`. null/undefined → em-dash placeholder. */
 export function money(n: number | null | undefined): string {
-  return n == null ? "—" : USD0.format(n);
+  return n == null ? "n/a" : USD0.format(n);
 }
 
 /** Thousands-separated integer. `1,234`. */

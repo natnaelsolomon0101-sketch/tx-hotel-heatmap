@@ -18,7 +18,7 @@ const PAD_BOTTOM = 14;
 
 /** $26.0M / $850K / $640 — compact money for headline stats. */
 function compactMoney(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return "—";
+  if (n == null || !Number.isFinite(n)) return "n/a";
   const abs = Math.abs(n);
   if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `$${Math.round(n / 1_000)}K`;
@@ -26,7 +26,7 @@ function compactMoney(n: number | null | undefined): string {
 }
 
 function money0(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return "—";
+  if (n == null || !Number.isFinite(n)) return "n/a";
   return `$${Math.round(n).toLocaleString()}`;
 }
 

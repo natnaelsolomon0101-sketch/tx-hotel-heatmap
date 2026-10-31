@@ -25,13 +25,13 @@ export interface CompsetPanelProps {
 
 /** Occupancy fraction (0–1) → "72%"; null/NaN → em-dash. */
 function pct(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "—";
+  if (n == null || Number.isNaN(n)) return "n/a";
   return `${Math.round(n * 100)}%`;
 }
 
 /** Distance in miles → "1.2 mi"; null/undefined → em-dash. */
 function miles(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "—";
+  if (n == null || Number.isNaN(n)) return "n/a";
   return `${n.toFixed(1)} mi`;
 }
 
@@ -96,7 +96,7 @@ function CompareRow({
             {delta.text} vs avg
           </span>
         ) : (
-          <span className="text-meta text-subtle">—</span>
+          <span className="text-meta text-subtle">n/a</span>
         )}
       </span>
     </div>

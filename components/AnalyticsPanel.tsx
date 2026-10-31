@@ -114,7 +114,7 @@ const RevparHistogram = memo(function RevparHistogram({
               rx={1.5}
               fill="hsl(var(--accent))"
             >
-              <title>{`$${b.label} — ${b.count.toLocaleString()} hotels`}</title>
+              <title>{`$${b.label}: ${b.count.toLocaleString()} hotels`}</title>
             </rect>
             <text
               x={x + barW / 2}

@@ -55,7 +55,7 @@ export default function PrintBrief({ stats, topRows, period }: PrintBriefProps) 
         <p className="mt-2 text-xs text-gray-600">
           Top market: <span className="font-medium">{fmtMarket(stats.topMarket)}</span>
           {stats.topMarket
-            ? ` — ${fmtMoney(stats.topMarket.avg)} avg across ${stats.topMarket.count} hotels`
+            ? `, ${fmtMoney(stats.topMarket.avg)} avg across ${stats.topMarket.count} hotels`
             : ""}
         </p>
       </section>
@@ -118,7 +118,7 @@ export default function PrintBrief({ stats, topRows, period }: PrintBriefProps) 
                     {titleCase(p.city)}, {p.state}
                   </td>
                   <td className="py-1.5 pr-2 text-right tabular-nums">
-                    {p.rooms != null ? p.rooms.toLocaleString() : "—"}
+                    {p.rooms != null ? p.rooms.toLocaleString() : "n/a"}
                   </td>
                   <td className="py-1.5 pr-2 text-right font-semibold tabular-nums">
                     {fmtMoney(p.revpar)}

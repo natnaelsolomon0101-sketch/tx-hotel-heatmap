@@ -77,7 +77,7 @@ export default function ToolRail({
         </RailButton>
         <RailButton
           label={
-            polygonActive ? "Drawing polygon — Esc to cancel" : "Draw polygon"
+            polygonActive ? "Drawing polygon (Esc to cancel)" : "Draw polygon"
           }
           active={polygonActive}
           onClick={onPolygon}
@@ -86,7 +86,7 @@ export default function ToolRail({
         </RailButton>
         <RailButton
           label={
-            radiusActive ? "Radius search — click map to place" : "Radius search"
+            radiusActive ? "Radius search: click map to place" : "Radius search"
           }
           active={radiusActive}
           onClick={onRadius}

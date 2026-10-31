@@ -1969,7 +1969,7 @@ export default function MapView() {
 
       <div
         className={`absolute z-20 flex flex-col gap-2.5 print:hidden
-          inset-x-2 bottom-2 max-h-[60dvh]
+          inset-x-2 bottom-8 max-h-[60dvh]
           md:inset-x-auto md:left-auto md:right-4 md:top-[68px] md:bottom-4 md:w-80 md:max-h-none md:gap-3 ${
             svOpen ? "hidden" : ""
           }`}
@@ -2240,7 +2240,7 @@ export default function MapView() {
       {dataError && (
         <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full bg-ink px-4 py-2 text-xs text-white shadow-md print:hidden">
           <span>
-            No hotel data loaded yet — run{" "}
+            No hotel data loaded yet. Run{" "}
             <code className="font-mono">npm run build-data</code> to generate
             public/hotels.geojson.
           </span>

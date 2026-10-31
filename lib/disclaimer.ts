@@ -15,7 +15,7 @@ export const FOOTER_DISCLOSURE =
 /** Block 2 — one-line credit for tight spaces (e.g. under a chart). */
 export const ONE_LINE_CREDIT =
   "Source: Texas Comptroller of Public Accounts (public data). Figures are " +
-  "derived estimates — not official.";
+  "derived estimates, not official.";
 
 /** Map tile credit (the on-map attribution badge is turned off). */
 export const BASEMAP_CREDIT = "Basemap: Esri.";
@@ -24,8 +24,8 @@ export const BASEMAP_CREDIT = "Basemap: Esri.";
 export const FIRST_RUN_ACK =
   `${APP_NAME} shows estimated hotel revenue and RevPAR calculated from public ` +
   "Texas Comptroller filings. These are derived estimates, not official or " +
-  "property-reported figures, and are provided for informational purposes only " +
-  "— not as investment, financial, or professional advice.";
+  "property-reported figures, and are provided for informational purposes only" +
+  ", not as investment, financial, or professional advice.";
 
 /** Block 3 — "About the Data" full sections. */
 export const ABOUT_SECTIONS: { heading: string; body: string }[] = [

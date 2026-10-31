@@ -9,7 +9,7 @@ import { featureKey } from "./PropertyList";
 import { CloseIcon } from "./icons";
 
 const pct = (n: number | null): string => {
-  if (n == null || Number.isNaN(n)) return "—";
+  if (n == null || Number.isNaN(n)) return "n/a";
   return `${Math.round(n * 100)}%`;
 };
 
@@ -88,13 +88,13 @@ function CompareTray({
       },
       {
         label: "Rank",
-        values: percentiles.map((p) => (p == null ? "—" : `${p}th pct`)),
+        values: percentiles.map((p) => (p == null ? "n/a" : `${p}th pct`)),
         nums: percentiles,
       },
       {
         label: "Rooms",
         values: items.map((f) =>
-          f.properties.rooms != null ? f.properties.rooms.toLocaleString() : "—"
+          f.properties.rooms != null ? f.properties.rooms.toLocaleString() : "n/a"
         ),
         nums: items.map((f) => f.properties.rooms),
       },
@@ -144,7 +144,7 @@ function CompareTray({
   if (items.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-2 z-30 flex justify-center px-2 print:hidden md:bottom-4">
+    <div className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex justify-center px-2 print:hidden md:bottom-4">
       <div
         role="region"
         aria-label="Hotel comparison"
@@ -192,7 +192,7 @@ function CompareTray({
                       {titleCase(p.name)}
                     </div>
                     <div className="truncate text-[10px] text-muted-foreground">
-                      {p.city ? titleCase(p.city) : "—"}
+                      {p.city ? titleCase(p.city) : "n/a"}
                       {p.state ? `, ${p.state}` : ""}
                     </div>
                   </div>

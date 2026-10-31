@@ -46,7 +46,7 @@ function PercentileBar({
         </span>
         <span className="text-meta font-mono tabular-nums text-muted-foreground">
           {pct == null ? (
-            "—"
+            "n/a"
           ) : (
             <>
               <span className="font-semibold text-foreground">P{pct}</span>

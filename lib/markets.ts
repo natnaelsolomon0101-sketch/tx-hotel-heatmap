@@ -34,7 +34,7 @@ export const MIN_ZIP_SIZE = 5;
 /** Sentinel key for features whose grouping value is blank. Rows with this key
  *  are excluded from the ranking via the minSize gate (their `count` is reported
  *  but they never qualify on their own merits unless minSize is 0). */
-export const BLANK_KEY = "—";
+export const BLANK_KEY = "(blank)";
 
 /** Generic area-level aggregation. `keyFn` derives a grouping key from each
  *  feature; rows are sorted by average RevPAR descending and only groups with at

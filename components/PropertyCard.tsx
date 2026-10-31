@@ -39,7 +39,7 @@ type PropertyCardProps = {
 };
 
 function pct(n: number | null): string {
-  if (n == null || Number.isNaN(n)) return "—";
+  if (n == null || Number.isNaN(n)) return "n/a";
   return `${Math.round(n * 100)}%`;
 }
 
@@ -345,7 +345,7 @@ function PropertyCard({
               onClick={onToggleSaved}
               aria-label={saved ? "Remove from watchlist" : "Save to watchlist"}
               aria-pressed={saved}
-              title={saved ? "Saved — click to remove" : "Save to watchlist"}
+              title={saved ? "Saved. Click to remove" : "Save to watchlist"}
               className="transition-base flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"
             >
               <BookmarkIcon className="h-4 w-4" filled={saved} />

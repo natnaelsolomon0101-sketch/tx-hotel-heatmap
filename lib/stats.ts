@@ -35,7 +35,7 @@ export function computeStats(features: HotelFeature[]): PortfolioStats {
     if (p.bucket in buckets) buckets[p.bucket] += 1;
     if (p.revpar != null) {
       revpars.push(p.revpar);
-      const city = p.city || "—";
+      const city = p.city || "n/a";
       const m = byCity.get(city) ?? { sum: 0, count: 0 };
       m.sum += p.revpar;
       m.count += 1;
@@ -73,7 +73,7 @@ const USD0 = new Intl.NumberFormat("en-US", {
 });
 
 export const fmtMoney = (n: number | null): string =>
-  n == null ? "—" : USD0.format(n);
+  n == null ? "n/a" : USD0.format(n);
 
 export const fmtMarket = (m: PortfolioStats["topMarket"]): string =>
-  m ? titleCase(m.city) : "—";
+  m ? titleCase(m.city) : "n/a";

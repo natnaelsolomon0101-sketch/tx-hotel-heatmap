@@ -171,7 +171,7 @@ const PropertyRow = memo(function PropertyRow({
           onClick={() => onToggleSaved(k)}
           aria-label={saved ? "Remove from watchlist" : "Save to watchlist"}
           aria-pressed={saved}
-          title={saved ? "Saved — click to remove" : "Save to watchlist"}
+          title={saved ? "Saved. Click to remove" : "Save to watchlist"}
           className={`shrink-0 rounded-md p-1 transition-base ${
             saved
               ? "text-foreground hover:bg-muted"
