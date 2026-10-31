@@ -167,11 +167,19 @@ const GENERIC = new Set(
 // Brand words: two names carrying different brands are different hotels
 // (a Courtyard and a Residence Inn often share one address).
 const BRAND = new Set(
-  "hampton hilton garden homewood home2 tru embassy doubletree curio tapestry marriott courtyard fairfield residence springhill towneplace aloft element moxy westin sheraton renaissance autograph holiday crowne staybridge candlewood avid indigo kimpton hyatt wyndham baymont microtel wingate ramada days super travelodge howard quinta laquinta comfort quality sleep clarion econo rodeway ascend cambria mainstay suburban woodspring radisson country best western drury omni sonesta extended stay motel6 red roof americas intown".split(" ")
+  "hampton hilton garden homewood home2 tru embassy doubletree curio tapestry marriott courtyard fairfield residence springhill towneplace aloft element moxy westin sheraton renaissance autograph holiday crowne staybridge candlewood avid indigo kimpton hyatt wyndham baymont microtel wingate ramada days super travelodge howard quinta laquinta comfort quality sleep clarion econo rodeway ascend cambria mainstay suburban woodspring radisson country best western drury omni sonesta extended stay motel6 studio6 super8 hiexpress holidayinn comfortinn comfortsuites budgetsuites red roof americas intown".split(" ")
 );
+// "Motel 6" / "Studio 6" / "Super 8" are brands, not a bare number that
+// would match any other "6" or "8".
 const tokens = (s) =>
   String(s ?? "")
     .toLowerCase()
+    .replace(/\b(motel|studio|super)\s*-?\s*(6|8)\b/g, "$1$2")
+    // Sister brands that differ only in a generic word are different hotels.
+    .replace(/\bholiday inn express\b/g, "hiexpress")
+    .replace(/\bholiday inn\b/g, "holidayinn")
+    .replace(/\bcomfort (inn|suites)\b/g, "comfort$1")
+    .replace(/\bbudget suites\b/g, "budgetsuites")
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9 ]+/g, " ")
     .split(/\s+/)
@@ -196,8 +204,17 @@ function nameSim(a, b, city = "") {
   const brandsA = [...A].filter((t) => BRAND.has(t)), brandsB = [...B].filter((t) => BRAND.has(t));
   if (brandsA.length && brandsB.length && !brandsA.some((t) => B.has(t))) return 0;
   let inter = 0, named = false;
-  for (const t of A) if (B.has(t)) { inter++; if (!DESCRIPTOR.has(t)) named = true; }
+  // A shared number alone ("6", "1st") is not a name match.
+  for (const t of A) if (B.has(t)) { inter++; if (!DESCRIPTOR.has(t) && /[a-z]{2}/.test(t)) named = true; }
   if (!named) return 0;
+  // When one name's tokens all sit inside the other's, the longer name's
+  // extra tokens must be brand or location words: "Courtyard" ~ "Courtyard
+  // Dallas NW", but "Angelina Motel" is not "Angelina College".
+  if (inter === Math.min(A.size, B.size) && A.size !== B.size) {
+    const [small, big] = A.size < B.size ? [A, B] : [B, A];
+    const smallBranded = [...small].some((t) => BRAND.has(t));
+    if (!smallBranded && [...big].some((t) => !small.has(t) && !DESCRIPTOR.has(t) && !BRAND.has(t) && /[a-z]{2}/.test(t))) return 0;
+  }
   return inter / Math.min(A.size, B.size); // containment: "Drury Inn Austin North" ~ "Drury Inn & Suites Austin North"
 }
 const metres = (a, b) => {
@@ -225,19 +242,26 @@ function loadOsm() {
   }
 }
 /** Best OSM lodging POI for a hotel.
- *  With a Census point (`near`): name match >= 0.67 within 3 km; nearest wins.
+ *  With a Census point (`near`): name match >= 0.67 within 400 m of an
+ *  exact Census point or 1.5 km of a rougher one; nearest wins.
  *  Without one: name match >= 0.67, tagged with the hotel's ZIP or city (or
  *  within 5 km of the ZIP's centroid on the current map), at most 25 km out,
  *  and unambiguous: if another matching POI sits > 500 m away, no match. */
 function osmMatch(osm, h, near, zipCentroid) {
   const zc = zipCentroid.get(h.zip);
   const hits = [];
+  const hotelBranded = [...coreTokens(h.name, h.city)].some((t) => BRAND.has(t));
   for (const o of osm) {
     const sim = nameSim(h.name, o.name, h.city);
     if (sim < 0.67) continue;
+    // A branded POI ("La Quinta ... Normandy") is not an unbranded filer
+    // ("Normandy Inn Motel") that happens to share a word.
+    if (!hotelBranded && [...coreTokens(o.name, h.city)].some((t) => BRAND.has(t))) continue;
     if (near) {
+      // An exact Census address point is already good; only an OSM POI right
+      // next to it can refine it. A rougher Census point allows more slack.
       const d = metres(near, o);
-      if (d <= 3000) hits.push({ ...o, sim, d, from: "census point" });
+      if (d <= (near.matchType === "Exact" ? 400 : 1500)) hits.push({ ...o, sim, d, from: "census point" });
     } else {
       const d = zc ? metres(zc, o) : null;
       const tagged = (o.zip && o.zip === h.zip) || (o.city && o.city === norm(h.city));
@@ -351,6 +375,14 @@ if (fresh.length) {
     // Duplicate guard: same hotel already on the map under another address spelling.
     const dup = existingPts.find((e) => metres(e, pt) <= 150 && (nameSim(e.name, nm.name, h.city) >= 0.67 || nameSim(e.owner, h.rawName, h.city) >= 0.67));
     if (dup) { report.duplicatesSkipped.push({ ...base, existingId: dup.id, existingName: dup.name, via }); return; }
+    // A point on top of a different pin (within 25 m, different address, no
+    // name match) is usually the other hotel's POI picked up by a loose
+    // match, or a renamed property under a new taxpayer. Leave it for review.
+    const taken = existingPts.find((e) => metres(e, pt) <= 25);
+    if (taken) {
+      report.unmapped.push({ ...base, reason: `point within 25 m of existing pin ${taken.id} "${taken.name}" (${via})` });
+      return;
+    }
 
     const id = nextId++;
     const props = {

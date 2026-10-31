@@ -80,6 +80,26 @@ const daysInMonth = (y, m) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); // m
 const qOfMonth = (y, m) => `${y}Q${Math.floor(m / 3) + 1}`;
 const daysInQuarter = (y, q) => [0, 1, 2].reduce((s, i) => s + daysInMonth(y, (q - 1) * 3 + i), 0);
 
+const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const zip5 = (s) => String(s ?? "").trim().slice(0, 5);
+const keyOf = (addr, city, zip) => `${norm(addr)}|${norm(city)}|${zip5(zip)}`;
+const money = (v) => {
+  const n = Number(String(v ?? "").replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
+function loadPeriod(file) {
+  const raw = fs.readFileSync(`${PERIOD_DIR}/${file}`, "utf8");
+  return parse(raw, {
+    columns: (h) => h.map((x) => x.trim()),
+    skip_empty_lines: true,
+    relax_column_count: true,
+    trim: true,
+  });
+}
+
+const keyOfRow = (r) => keyOf(r["Location Address"], r["Location City"], r["Location Zip"]);
+
 const annualFiles = []; // { file, label, days }
 const quarterFiles = []; // { file, q, y, n }
 const monthFiles = []; // { file, y, m, q }
@@ -113,6 +133,64 @@ for (const { q, y, m } of monthFiles) {
   quarterInfo.set(q, info);
 }
 for (const info of quarterInfo.values()) if (info.months) info.partial = info.months.size < 3;
+
+// --- Filing coverage ---------------------------------------------------------
+// A month file can be on disk but still short of late filers (a Comptroller
+// file pulled soon after the due date, or before late filings were added).
+// Using it as if complete would understate every late filer's quarter and
+// T12. So each month is checked against its neighbours: of the hotels that
+// filed in the month before AND the month after (or, for the newest month,
+// the two months before), how many filed in this month too? Complete months
+// score ~100% (a month-to-month closure or sale is rare). A month under
+// MIN_COVERAGE is "incomplete": its quarter becomes a partial trend point,
+// it can't be in T12, and it can't be "last month".
+// For a quarter-end month that has the previous quarter-end month on file,
+// the quarterly filers (in that month but not the two before it) are checked
+// the same way.
+// Set ACCEPT_INCOMPLETE=1 to treat every month on disk as complete.
+const MIN_COVERAGE = 0.98;
+// Quarterly filers churn more between quarters (small and seasonal places
+// open, close or switch to monthly), so their bar is lower.
+const MIN_COVERAGE_QUARTERLY = 0.9;
+const ACCEPT_INCOMPLETE = process.env.ACCEPT_INCOMPLETE === "1";
+const monthIndex = (f) => f.y * 12 + f.m;
+const monthByIndex = new Map(monthFiles.map((f) => [monthIndex(f), f]));
+const monthKeys = new Map(); // file -> Set<hotelKey>
+const keysOfMonth = (f) => {
+  if (!f) return null;
+  if (!monthKeys.has(f.file)) monthKeys.set(f.file, new Set(loadPeriod(f.file).map(keyOfRow)));
+  return monthKeys.get(f.file);
+};
+const share = (ref, have) => {
+  let n = 0, hit = 0;
+  for (const k of ref) { n++; if (have.has(k)) hit++; }
+  return n ? { n, hit, cov: hit / n } : null;
+};
+const incompleteMonths = new Map(); // file -> reason
+for (const f of monthFiles) {
+  const i = monthIndex(f);
+  const prev = keysOfMonth(monthByIndex.get(i - 1));
+  const next = keysOfMonth(monthByIndex.get(i + 1));
+  const prev2 = keysOfMonth(monthByIndex.get(i - 2));
+  const have = keysOfMonth(f);
+  const ref = prev && next ? [...prev].filter((k) => next.has(k)) : prev && prev2 && !next ? [...prev].filter((k) => prev2.has(k)) : null;
+  const checks = [];
+  if (ref) checks.push(["monthly filers", share(ref, have)]);
+  if (f.m % 3 === 2) {
+    const pq = keysOfMonth(monthByIndex.get(i - 3));
+    const pq1 = keysOfMonth(monthByIndex.get(i - 4));
+    const pq2 = keysOfMonth(monthByIndex.get(i - 5));
+    if (pq && pq1 && pq2) checks.push(["quarterly filers", share([...pq].filter((k) => !pq1.has(k) && !pq2.has(k)), have)]);
+  }
+  const parts = [];
+  for (const [what, r] of checks) {
+    if (!r) continue;
+    parts.push(`${what} ${(100 * r.cov).toFixed(1)}% (${(r.n - r.hit).toLocaleString()} of ${r.n.toLocaleString()} missing)`);
+    if (r.cov < (what === "quarterly filers" ? MIN_COVERAGE_QUARTERLY : MIN_COVERAGE) && !ACCEPT_INCOMPLETE) incompleteMonths.set(f.file, parts.at(-1));
+  }
+  console.log(`  coverage ${f.file.padEnd(16)} ${parts.join(", ") || "no neighbours to check"}${incompleteMonths.has(f.file) ? "  << INCOMPLETE" : ""}`);
+}
+for (const f of monthFiles) if (incompleteMonths.has(f.file)) quarterInfo.get(f.q).partial = true;
 const sortedQuarters = [...quarterInfo.keys()].sort();
 const QUARTERS = [...annualFiles.map((a) => a.label), ...sortedQuarters];
 // Actual calendar days in each reporting period: the per-night divisor.
@@ -134,8 +212,9 @@ const T12_QUARTERS = complete.slice(-4);
 }
 const T12_DAYS = T12_QUARTERS.reduce((s, q) => s + DAYS_IN[q], 0);
 
-// Latest reported single month: drives "last month" RevPAR.
-const lm = monthFiles[monthFiles.length - 1];
+// Latest COMPLETE single month: drives "last month" RevPAR.
+const lm = monthFiles.filter((f) => !incompleteMonths.has(f.file)).at(-1);
+if (!lm) throw new Error("No complete month file for last-month figures");
 const LAST_MONTH = {
   file: lm.file,
   label: `${MONTH_LABEL[lm.m]} ${lm.y}`,
@@ -150,24 +229,6 @@ const LAST_MONTH = {
 console.log(`Periods: ${QUARTERS.join(" ")}`);
 console.log(`  partial: ${[...PARTIAL].join(" ") || "none"}   T12: ${T12_QUARTERS.join(" + ")} (${T12_DAYS} days)   last month: ${LAST_MONTH.label}`);
 
-const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-const zip5 = (s) => String(s ?? "").trim().slice(0, 5);
-const keyOf = (addr, city, zip) => `${norm(addr)}|${norm(city)}|${zip5(zip)}`;
-const money = (v) => {
-  const n = Number(String(v ?? "").replace(/[^0-9.\-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-};
-
-function loadPeriod(file) {
-  const raw = fs.readFileSync(`${PERIOD_DIR}/${file}`, "utf8");
-  return parse(raw, {
-    columns: (h) => h.map((x) => x.trim()),
-    skip_empty_lines: true,
-    relax_column_count: true,
-    trim: true,
-  });
-}
-
 // revByQuarter: Map<hotelKey, Map<quarter, revenue>>
 const revByQuarter = new Map();
 function addRevenue(hotelKey, quarter, revenue) {
@@ -180,7 +241,6 @@ const revLastMonth = new Map();
 
 console.log("Reading period files from", PERIOD_DIR, "...");
 const revOf = (r) => money(r[" Revenue "] ?? r["Revenue"]);
-const keyOfRow = (r) => keyOf(r["Location Address"], r["Location City"], r["Location Zip"]);
 
 // Annual baselines: sum every filing row per hotel.
 for (const { file, label } of annualFiles) {

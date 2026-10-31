@@ -53,13 +53,14 @@ console.log(`with T12 RevPAR: ${withT12(before)} -> ${withT12(after)}`);
 console.log(`cleaned owner-LLC names (owner prop): ${owners(before)} -> ${owners(after)}`);
 for (const f of added.slice(0, 50)) console.log(`  + ${f.properties.id} ${f.properties.name}, ${f.properties.address}, ${f.properties.city} (${f.properties.rooms} rooms)`);
 
-// Spot check: last-month RevPAR recomputed from the newest month file.
+// Spot check: last-month RevPAR recomputed from the month file the map's
+// "last month" came from (the newest COMPLETE month, not always the newest file).
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const lm = lastMonth(after)?.match(/^([A-Za-z]{3}) (\d{4})$/);
 const latest = fs.readdirSync("data/periods")
   .map((file) => { const m = file.match(/^(\d{4})-([A-Za-z]{3})[A-Za-z]*\.csv$/); return m ? { file, y: +m[1], m: MONTHS.indexOf(m[2].toUpperCase()) } : null; })
-  .filter((x) => x && x.m >= 0)
-  .sort((a, b) => a.y - b.y || a.m - b.m)
-  .at(-1);
+  .filter((x) => x && x.m >= 0 && lm && x.y === +lm[2] && x.m === MONTHS.indexOf(lm[1].toUpperCase()))
+  .at(0);
 if (latest) {
   const days = new Date(Date.UTC(latest.y, latest.m + 1, 0)).getUTCDate();
   const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");

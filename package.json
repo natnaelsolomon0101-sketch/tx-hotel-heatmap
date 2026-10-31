@@ -10,6 +10,7 @@
     "build-data": "tsx scripts/build-data.ts",
     "build-history": "node scripts/build-history.mjs",
     "convert-sift": "node scripts/convert-sift.mjs",
+    "sift-to-box": "node scripts/sift-to-box.mjs",
     "add-new-hotels": "node scripts/add-new-hotels.mjs",
     "update-data": "node scripts/add-new-hotels.mjs && node scripts/build-history.mjs",
     "test": "tsx --test lib/*.test.ts"

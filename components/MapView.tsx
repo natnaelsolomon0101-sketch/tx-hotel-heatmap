@@ -131,7 +131,7 @@ const LIST_LIMIT = 200;
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
 // Fallback label until the data loads; the real one comes from the data
 // (properties.lastMonth, written by scripts/build-history.mjs).
-const DATA_PERIOD = "May 2026";
+const DATA_PERIOD = "Aug 2026";
 
 const SORTERS: Record<SortKey, (a: HotelFeature, b: HotelFeature) => number> = {
   "revpar-desc": (a, b) => (b.properties.revpar ?? -1) - (a.properties.revpar ?? -1),

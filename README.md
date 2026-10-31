@@ -114,20 +114,39 @@ Property-level hotel tax receipts are not on a public site (Tax Code §156.155).
 They are downloaded from the Comptroller's SIFT site
 (https://data-secure.comptroller.texas.gov, login required).
 
+SIFT's monthly files (`HOTyymm.zip` holding `HOTyymm.CSV`, or a bare `.CSV`)
+have no header row; they follow the "Hotel Tax Receipt Information File"
+layout (23 fields, the `.doc` in each zip). Both scripts below read them as-is.
+
 ```bash
-# 1. Convert the SIFT download into data/periods/YYYY-MON.csv
-#    (save .xlsx as CSV first). It prints the column mapping it used and, when
-#    the download overlaps a month already on file, which receipts column
-#    matches it to the dollar.
-npm run convert-sift -- ~/Downloads/<sift-download>.csv
+# 1. Convert the SIFT files into data/periods/YYYY-MON.csv. It prints the
+#    column mapping it used and, when a file overlaps a month already on file,
+#    which receipts column matches it to the dollar (it is Total Room
+#    Receipts, the column the Box history uses).
+npm run convert-sift -- ~/Downloads/HOT2606.CSV ~/Downloads/HOT2607.CSV
 
 # 2. Add hotels that are new in those months, then recompute RevPAR/history.
 npm run update-data
+
+# 3. Check nothing existing was lost, and spot-check last-month RevPAR.
+node scripts/validate-update.mjs <previous hotels.geojson>
+
+# Optional: the same months in the Box archive layout
+# ("Texan Hotel Analytics/2026/2026-JUN HOTEL ANALYTICS.csv").
+npm run sift-to-box -- ~/Downloads/HOT2606.CSV --out <folder>
 ```
 
 - **Periods are discovered from the files.** T12 = the last four complete,
-  consecutive quarters on file; "last month" = the newest month file; the
-  header's data month follows the data. No constants to edit.
+  consecutive quarters on file; "last month" = the newest complete month
+  file; the header's data month follows the data. No constants to edit.
+- **Incomplete months are detected, not trusted.** A file pulled soon after
+  the due date is short of late filers. `build-history` checks each month
+  against its neighbours (hotels that filed the month before and after, or
+  the two months before for the newest file; for a quarter-end month, also
+  last quarter's quarterly filers). A month under 98% (90% for quarterly
+  filers) is marked incomplete: its quarter is a partial trend point, it is
+  kept out of T12, and it can't be "last month". The coverage of every month
+  is printed. `ACCEPT_INCOMPLETE=1` turns the check off.
 - **Existing hotels are never renumbered or rewritten.** Ids (which history,
   watchlists and shared links key on), cleaned names, `owner`, brand
   enrichment and coordinates carry forward. Hotels are matched by normalized

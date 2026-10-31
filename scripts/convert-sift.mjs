@@ -12,6 +12,13 @@
  *
  * Save an .xlsx download as CSV first (Excel: File > Save As > CSV UTF-8).
  *
+ * SIFT's own files (HOTyymm.CSV inside HOTyymm.zip, HOTyyQn.CSV) have NO
+ * header row. They follow the "Hotel Tax Receipt Information File" record
+ * layout (the .doc that ships in each zip): 23 comma-separated fields, the
+ * period in field 20 (Obligation End Date YYYYMMDD, or "2026Q3" in the
+ * quarter files). A file whose first cell is an 11-digit taxpayer number is
+ * read with those field names.
+ *
  * Columns are found by name, so small header differences between downloads
  * don't matter; the mapping it picked is printed every run. Revenue is the
  * room receipts column. When a download overlaps a month already on file
@@ -78,7 +85,7 @@ const COLS = {
   locationCity: ["locationcity", "outletcity", "loccity"],
   locationState: ["locationstate", "outletstate", "locstate"],
   locationZip: ["locationzip", "locationzipcode", "outletzip", "loczip", "loczipcode"],
-  rooms: ["locationroomcapacity", "roomcapacity", "locationrooms", "rooms", "numberofrooms", "roomcount"],
+  rooms: ["locationroomcapacity", "roomcapacity", "unitcapacity", "locationrooms", "rooms", "numberofrooms", "roomcount"],
   period: [
     "obligationenddate", "responsibilityenddate", "reportingperiodenddate", "periodenddate",
     "reportingperiod", "reportperiod", "filingperiod", "reportingmonth", "reportingquarter", "period", "enddate",
@@ -128,8 +135,31 @@ function existingFileFor(p) {
   }) ?? null;
 }
 
-const readCsv = (file) =>
-  parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""), {
+// SIFT record layout ("Hotel Tax Receipt Information File"), used for files with no header row.
+const SIFT_LAYOUT = [
+  "Taxpayer Number", "Taxpayer Name", "Taxpayer Address", "Taxpayer City", "Taxpayer State", "Taxpayer Zip",
+  "Taxpayer County", "Taxpayer Phone", "Location Number", "Location Name", "Location Address", "Location City",
+  "Location State", "Location Zip", "Location County", "Location Phone", "Unit Capacity",
+  "Responsibility Begin Date", "Responsibility End Date", "Obligation End Date", "Filer Type",
+  "Total Room Receipts", "Taxable Receipts",
+];
+const isHeaderless = (text) => /^"?\s*\d{11}\s*"?,/.test(text);
+
+const readCsv = (file) => {
+  const buf = fs.readFileSync(file);
+  const text = buf.toString("utf8").replace(/^\uFEFF/, "");
+  if (isHeaderless(text)) {
+    // Raw SIFT files are single-byte text; read them as latin1 so a stray
+    // accented byte can't turn into U+FFFD.
+    const raw = buf.toString("latin1");
+    return parse(raw, { skip_empty_lines: true, relax_column_count: true, relax_quotes: true, trim: true }).map((r) =>
+      Object.fromEntries(SIFT_LAYOUT.map((h, i) => [h, r[i] ?? ""]))
+    );
+  }
+  return readCsvWithHeader(text);
+};
+const readCsvWithHeader = (text) =>
+  parse(text, {
     columns: (h) => h.map((x) => x.trim()),
     skip_empty_lines: true,
     relax_column_count: true,
