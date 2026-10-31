@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Animated loading skeleton shown while the map bundle (deck.gl + Google Maps)
+ * Animated loading skeleton shown while the map bundle (deck.gl + MapLibre)
  * loads. Mirrors the real layout: a header bar across the top and the right-hand
  * column of stacked panels. Pure CSS shimmer, zero deps.
  */

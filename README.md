@@ -3,23 +3,25 @@
 A full-screen CRE mapping tool that plots Texas hotels by **RevPAR** (revenue per
 available room), built from Texas Comptroller hotel-occupancy-tax data. Hotels are
 bucketed red / yellow / gray by RevPAR percentile and rendered as clustered colored
-pins or a true Google Maps density heatmap.
+pins or a RevPAR-weighted density heatmap.
 
-**Requires a Google Maps API key** (Maps JavaScript API + Geocoding API).
+The map needs **no API key**: MapLibre GL renders Esri's free ArcGIS Online tiles
+(World Topo Map, World Imagery for satellite). The on-map attribution badge is off;
+the footer carries "Basemap: Esri."
 
-![stack](https://img.shields.io/badge/Next.js-14-black) ![stack](https://img.shields.io/badge/Google%20Maps-JS%20API-green) ![stack](https://img.shields.io/badge/@vis.gl-react--google--maps-blue)
+![stack](https://img.shields.io/badge/Next.js-14-black) ![stack](https://img.shields.io/badge/MapLibre-GL-blue) ![stack](https://img.shields.io/badge/deck.gl-9-green)
 
 ## Features
 
-- **Full-screen Google Map** centered on Texas (Roadmap / Satellite / Terrain),
-  with clustering via @googlemaps/markerclusterer.
+- **Full-screen MapLibre map** centered on Texas (Map / Satellite), with
+  deck.gl pins and zoom-aware grid clustering.
 - **Colored markers by RevPAR bucket** — red (top third), yellow (middle third),
   gray (bottom third + missing data). Points cluster when zoomed out and expand
   on click.
 - **Property card** — click any hotel for a CRE-style card: photo, name, address,
   `{rooms} Rooms · Hospitality`, RevPAR, ADR, and occupancy.
 - **Heatmap layer** — the left-rail *Layers* button toggles between colored pins
-  and a Google Maps (visualization) density heatmap weighted by RevPAR.
+  and a MapLibre density heatmap weighted by RevPAR.
 - **Filter + legend** — the legend doubles as a filter: tap a bucket to show only
   red / yellow / gray hotels.
 - **Tool rail** — Location (recenter), Polygon, Radius, Layers, Map type. Zoom and
@@ -29,7 +31,7 @@ pins or a true Google Maps density heatmap.
 
 ```bash
 npm install
-cp .env.local.example .env.local   # add your Google Maps API key(s)
+cp .env.local.example .env.local   # optional keys (geocoding, lead sinks)
 npm run build-data                 # generates public/hotels.geojson
 npm run dev                        # http://localhost:3000
 ```
@@ -38,12 +40,8 @@ npm run dev                        # http://localhost:3000
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | browser (build + runtime) | Renders the Google map. Needs **Maps JavaScript API**. Ships to the client — **restrict it by HTTP referrer** in Google Cloud. |
 | `GOOGLE_GEOCODING_API_KEY` | `build-data` script only | Rooftop geocoding via the **Geocoding API**. Server-side only; can be the same key or a separate IP-restricted one. Falls back to the free US Census geocoder if unset. |
 
-> **On Vercel:** add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` under Project → Settings →
-> Environment Variables (Production + Preview). Without it the app shows a
-> "Google Maps key missing" notice.
 
 ## Data pipeline
 
@@ -123,10 +121,9 @@ the correct RevPAR on top.
 ## Deploy (Vercel)
 
 This repo is set up for Vercel auto-deploy: push to `main` and Vercel builds and
-deploys. Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` in the project's environment
-variables so the deployed map renders.
+deploys. The map itself needs no environment variables.
 
 ## Tech
 
-Next.js 14 (App Router, TypeScript) · Tailwind CSS · @vis.gl/react-google-maps +
-Google Maps JS API · @googlemaps/markerclusterer · `tsx` for the data pipeline.
+Next.js 14 (App Router, TypeScript) · Tailwind CSS · MapLibre GL + Esri tiles ·
+deck.gl (`@deck.gl/mapbox` MapboxOverlay) · `tsx` for the data pipeline.

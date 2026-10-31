@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import {
-  APIProvider,
-  Map,
-  useMap,
-  useMapsLibrary,
-} from "@vis.gl/react-google-maps";
-import { GoogleMapsOverlay } from "@deck.gl/google-maps";
+import type { ExpressionSpecification, GeoJSONSource } from "maplibre-gl";
 import { ScatterplotLayer, TextLayer } from "@deck.gl/layers";
 import type { Layer } from "@deck.gl/core";
+import MapCanvas, {
+  BasemapId,
+  MapClick,
+  firstAreaLayerId,
+  setBasemap,
+  useDeckOverlay,
+  useMap,
+  whenStyleReady,
+} from "./MapCanvas";
 
 import {
   Bucket,
@@ -114,10 +117,16 @@ import {
   RadiusStep,
 } from "@/lib/geo";
 
-const GOOGLE_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
+// Zoom levels are MapLibre's (512px world tiles), one step below the old
+// Google Maps values (256px tiles) for the same on-screen scale.
 const TEXAS_CENTER = { lat: 31.3, lng: -99.3 };
-const TEXAS_ZOOM = 5.5;
+const TEXAS_ZOOM = 4.5;
+const MIN_ZOOM = 2;
+const MAX_ZOOM = 19;
+// flyTo never lands further out than this (street level, clusters off).
+const FOCUS_ZOOM = 13;
+// Cluster "expand" clicks never zoom in past this.
+const EXPAND_MAX_ZOOM = 15;
 const LIST_LIMIT = 200;
 const ALL_BUCKETS: Bucket[] = ["red", "yellow", "gray"];
 const DATA_PERIOD = "May 2026";
@@ -130,11 +139,12 @@ const SORTERS: Record<SortKey, (a: HotelFeature, b: HotelFeature) => number> = {
   "name-asc": (a, b) => a.properties.name.localeCompare(b.properties.name),
 };
 
-const MAP_TYPES = [
-  { label: "Roadmap", id: "roadmap" },
-  { label: "Satellite", id: "hybrid" },
-  { label: "Terrain", id: "terrain" },
-] as const;
+// Esri basemaps (free ArcGIS Online tiles). Index is persisted in shared links
+// (`mt`); an out-of-range index from an older link falls back to 0.
+const MAP_TYPES: { label: string; id: BasemapId }[] = [
+  { label: "Map", id: "topo" },
+  { label: "Satellite", id: "satellite" },
+];
 
 // RevPAR bucket colors as RGBA for deck.gl.
 const BUCKET_RGBA: Record<Bucket, [number, number, number, number]> = {
@@ -223,7 +233,7 @@ function applyRemovedPeers(
 // Clustering config. `clusterRadius` is the nominal merge radius in pixels;
 // `disengageZoom` is the zoom level at/above which we drop clustering and
 // render raw individual pins (so dense urban cores stay precise on close-in
-// views). At Texas-wide zoom (~5-6) this produces a handful of metro clusters.
+// views). At Texas-wide zoom (~4-5) this produces a handful of metro clusters.
 type ClusteringSettings = {
   clusterRadius: number; // px — nominal merge radius for the cluster bubble
   disengageZoom: number; // zoom >= this → raw pins, no clustering
@@ -231,7 +241,7 @@ type ClusteringSettings = {
 
 const CLUSTERING: ClusteringSettings = {
   clusterRadius: 40,
-  disengageZoom: 10,
+  disengageZoom: 9,
 };
 
 // A grid cluster: members plus a weighted centroid and dominant bucket.
@@ -255,12 +265,12 @@ function clusterFeatures(
   zoom: number,
   radiusPx: number
 ): { clusters: Cluster[]; singles: HotelFeature[] } {
-  // World pixels per degree of longitude at this zoom: 256 * 2^zoom / 360.
-  const worldPx = 256 * Math.pow(2, zoom);
+  // World pixels per degree of longitude at this zoom: 512 * 2^zoom / 360
+  // (MapLibre's world is 512px wide at zoom 0).
+  const worldPx = 512 * Math.pow(2, zoom);
   const pxPerDeg = worldPx / 360;
   const cellDeg = radiusPx / Math.max(pxPerDeg, 1e-6);
-  // Use the global Map constructor explicitly — the imported `Map` component
-  // from @vis.gl/react-google-maps shadows it in this module scope.
+  // Use the global Map constructor explicitly (never a map-library `Map`).
   const cells: globalThis.Map<string, HotelFeature[]> = new globalThis.Map();
   for (const f of features) {
     const [lng, lat] = f.geometry.coordinates;
@@ -341,6 +351,7 @@ function MarkersLayer({
   compsetPeerIds,
   compsetFeatures,
   selectedFeature = null,
+  clickable = true,
 }: {
   features: HotelFeature[];
   visible: boolean;
@@ -357,46 +368,57 @@ function MarkersLayer({
   compsetFeatures?: HotelFeature[];
   // The currently clicked/searched hotel to spotlight on the map.
   selectedFeature?: HotelFeature | null;
+  // False while an area tool is taking map clicks (radius placement, polygon
+  // drawing): a click on a pin/cluster then feeds the tool instead of
+  // selecting the hotel or expanding the cluster.
+  clickable?: boolean;
 }) {
   const map = useMap();
-  const overlayRef = useRef<GoogleMapsOverlay | null>(null);
+  // Shared deck.gl overlay (created by MapCanvas, drawn above the basemap).
+  const overlay = useDeckOverlay();
   const [zoom, setZoom] = useState<number>(TEXAS_ZOOM);
 
+  // Track zoom so clustering re-buckets as the user zooms in/out. Quantized
+  // to quarter steps so a smooth zoom animation doesn't re-cluster every frame.
   useEffect(() => {
     if (!map) return;
-    const overlay = new GoogleMapsOverlay({ interleaved: false });
-    overlay.setMap(map);
-    overlayRef.current = overlay;
-    return () => {
-      overlay.setMap(null);
-      overlayRef.current = null;
-    };
-  }, [map]);
-
-  // Track zoom so clustering re-buckets as the user zooms in/out.
-  useEffect(() => {
-    if (!map) return;
-    const sync = () => setZoom(map.getZoom() ?? TEXAS_ZOOM);
+    const sync = () => setZoom(Math.round(map.getZoom() * 4) / 4);
     sync();
-    const l = map.addListener("zoom_changed", sync);
-    return () => l.remove();
+    map.on("zoom", sync);
+    return () => {
+      map.off("zoom", sync);
+    };
   }, [map]);
 
   // Fit the map to a cluster's bounds (expand on click). Falls back to a
   // zoom-in step when all members share a point.
   const expandCluster = useCallback(
     (c: Cluster) => {
-      if (!map || !window.google) return;
-      const b = new google.maps.LatLngBounds();
+      if (!map) return;
+      let w = Infinity;
+      let s = Infinity;
+      let e = -Infinity;
+      let n = -Infinity;
       for (const m of c.members) {
         const [lng, lat] = m.geometry.coordinates;
-        b.extend({ lat, lng });
+        if (lng < w) w = lng;
+        if (lng > e) e = lng;
+        if (lat < s) s = lat;
+        if (lat > n) n = lat;
       }
-      if (b.getNorthEast().equals(b.getSouthWest())) {
-        map.panTo(b.getCenter());
-        map.setZoom(Math.min((map.getZoom() ?? TEXAS_ZOOM) + 2, 16));
+      if (w === e && s === n) {
+        map.easeTo({
+          center: [w, s],
+          zoom: Math.min(map.getZoom() + 2, EXPAND_MAX_ZOOM),
+        });
       } else {
-        map.fitBounds(b, 64);
+        map.fitBounds(
+          [
+            [w, s],
+            [e, n],
+          ],
+          { padding: 64, maxZoom: EXPAND_MAX_ZOOM }
+        );
       }
     },
     [map]
@@ -429,7 +451,6 @@ function MarkersLayer({
   }, [features, sizeBy]);
 
   useEffect(() => {
-    const overlay = overlayRef.current;
     if (!overlay) return;
     if (!visible) {
       overlay.setProps({ layers: [] });
@@ -475,7 +496,7 @@ function MarkersLayer({
         autoHighlight: true,
         highlightColor: [255, 255, 255, 80],
         onClick: (info) => {
-          if (info.object) onSelect(info.object as HotelFeature);
+          if (clickable && info.object) onSelect(info.object as HotelFeature);
         },
         // Hover tooltip: fire on pin mouseover with the cursor's screen-space
         // (x,y) so MapView can position a small popup; clear it on mouseout
@@ -595,7 +616,7 @@ function MarkersLayer({
           autoHighlight: true,
           highlightColor: [255, 255, 255, 60],
           onClick: (info) => {
-            if (info.object) expandCluster(info.object as Cluster);
+            if (clickable && info.object) expandCluster(info.object as Cluster);
           },
           // Clusters aren't individual hotels — never show the hotel tooltip,
           // and clear any stale one when the cursor enters a bubble.
@@ -708,11 +729,10 @@ function MarkersLayer({
     }
 
     overlay.setProps({ layers });
-    // `map` is in the deps so this re-runs once the overlay is created (Effect A
-    // runs first in the same commit); without it the layer never attaches on
-    // first load and pins never paint.
+    // `overlay` is in the deps so this re-runs once MapCanvas has created it;
+    // without it the layer never attaches on first load and pins never paint.
   }, [
-    map,
+    overlay,
     features,
     visible,
     onSelect,
@@ -726,6 +746,7 @@ function MarkersLayer({
     compsetPeerIds,
     compsetFeatures,
     selectedFeature,
+    clickable,
   ]);
 
   return null;
@@ -760,8 +781,25 @@ function HoverTooltip({ info }: { info: HoverInfo | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// RevPAR-weighted heatmap layer (visualization library).
+// RevPAR-weighted heatmap layer (MapLibre native heatmap). Tuned to match the
+// old Google visualization layer: 24px radius, 0.8 opacity, Google's default
+// green-to-red gradient, saturating around $6,000 of summed RevPAR.
 // ---------------------------------------------------------------------------
+const HEAT_SRC = "revpar-heat";
+const HEAT_GRADIENT: [number, string][] = [
+  [0, "rgba(102, 255, 0, 0)"],
+  [0.1, "rgba(102, 255, 0, 1)"],
+  [0.2, "rgba(147, 255, 0, 1)"],
+  [0.3, "rgba(193, 255, 0, 1)"],
+  [0.4, "rgba(238, 255, 0, 1)"],
+  [0.5, "rgba(244, 227, 0, 1)"],
+  [0.6, "rgba(249, 198, 0, 1)"],
+  [0.7, "rgba(255, 170, 0, 1)"],
+  [0.8, "rgba(255, 113, 0, 1)"],
+  [0.9, "rgba(255, 57, 0, 1)"],
+  [1, "rgba(255, 0, 0, 1)"],
+];
+
 function HeatLayer({
   features,
   visible,
@@ -770,36 +808,72 @@ function HeatLayer({
   visible: boolean;
 }) {
   const map = useMap();
-  const vis = useMapsLibrary("visualization");
-  const layerRef = useRef<{ setMap: (m: google.maps.Map | null) => void } | null>(
-    null
-  );
+
+  // Create the source + layer once; remove them on unmount.
+  useEffect(() => {
+    if (!map) return;
+    const cancel = whenStyleReady(map, () => {
+      if (map.getSource(HEAT_SRC)) return;
+      map.addSource(HEAT_SRC, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer(
+        {
+          id: HEAT_SRC,
+          type: "heatmap",
+          source: HEAT_SRC,
+          layout: { visibility: "none" },
+          paint: {
+            "heatmap-radius": 24,
+            "heatmap-opacity": 0.8,
+            // One hotel adds revpar/2400 (MapLibre's kernel peaks near 0.4),
+            // so ~$6,000 of nearby RevPAR saturates, as Google's maxIntensity did.
+            "heatmap-weight": ["/", ["coalesce", ["get", "w"], 0], 2400],
+            "heatmap-intensity": 1,
+            "heatmap-color": [
+              "interpolate",
+              ["linear"],
+              ["heatmap-density"],
+              ...HEAT_GRADIENT.flat(),
+            ] as unknown as ExpressionSpecification,
+          },
+        },
+        // Stay beneath any drawn polygon / radius shapes.
+        firstAreaLayerId(map)
+      );
+    });
+    return () => {
+      cancel();
+      try {
+        if (map.getLayer(HEAT_SRC)) map.removeLayer(HEAT_SRC);
+        if (map.getSource(HEAT_SRC)) map.removeSource(HEAT_SRC);
+      } catch {
+        /* map already removed */
+      }
+    };
+  }, [map]);
 
   useEffect(() => {
-    if (!map || !vis) return;
-    if (!visible) {
-      layerRef.current?.setMap(null);
-      return;
-    }
-    const data = features
-      .filter((f) => f.properties.revpar != null)
-      .map((f) => {
-        const [lng, lat] = f.geometry.coordinates;
-        return {
-          location: new google.maps.LatLng(lat, lng),
-          weight: f.properties.revpar as number,
-        };
-      });
-    const layer = new (vis as any).HeatmapLayer({
-      data,
-      radius: 24,
-      opacity: 0.8,
-      maxIntensity: 6000,
+    if (!map) return;
+    return whenStyleReady(map, () => {
+      const src = map.getSource(HEAT_SRC) as GeoJSONSource | undefined;
+      if (!src) return;
+      if (visible) {
+        src.setData({
+          type: "FeatureCollection",
+          features: features
+            .filter((f) => f.properties.revpar != null)
+            .map((f) => ({
+              type: "Feature" as const,
+              geometry: f.geometry,
+              properties: { w: f.properties.revpar as number },
+            })),
+        });
+      }
+      map.setLayoutProperty(HEAT_SRC, "visibility", visible ? "visible" : "none");
     });
-    layer.setMap(map);
-    layerRef.current = layer;
-    return () => layer.setMap(null);
-  }, [map, vis, features, visible]);
+  }, [map, features, visible]);
 
   return null;
 }
@@ -808,12 +882,11 @@ function HeatLayer({
 // Imperative bits driven by the toolbar/zoom controls + viewport tracking.
 // ---------------------------------------------------------------------------
 function MapController({
-  mapTypeId,
+  basemap,
   onBounds,
   registerControls,
-  onStreetView,
 }: {
-  mapTypeId: string;
+  basemap: BasemapId;
   onBounds: (b: [number, number, number, number]) => void;
   registerControls: (api: {
     zoomIn: () => void;
@@ -822,63 +895,50 @@ function MapController({
     recenter: () => void;
     flyTo: (lng: number, lat: number) => void;
   }) => void;
-  onStreetView: (visible: boolean) => void;
 }) {
   const map = useMap();
 
   useEffect(() => {
     if (!map) return;
-    map.setMapTypeId(mapTypeId as google.maps.MapTypeId);
-  }, [map, mapTypeId]);
+    return whenStyleReady(map, () => setBasemap(map, basemap));
+  }, [map, basemap]);
 
-  // Enable the draggable Street View "pegman" + an inline panorama. We run
-  // disableDefaultUI on the map, so re-enable just this control and tuck it
-  // bottom-left (clear of the header, right panel, and zoom controls).
-  useEffect(() => {
-    if (!map || !window.google) return;
-    map.setOptions({
-      streetViewControl: true,
-      streetViewControlOptions: {
-        position: google.maps.ControlPosition.LEFT_BOTTOM,
-      },
-    });
-    // When the pegman opens Street View, tell MapView so it can clear the
-    // overlay UI + pins out of the way (otherwise they bury the panorama and
-    // its exit button).
-    const sv = map.getStreetView();
-    const l = sv.addListener("visible_changed", () =>
-      onStreetView(sv.getVisible())
-    );
-    return () => l.remove();
-  }, [map, onStreetView]);
-
+  // Report the visible bounds after every move (and once on load/resize) so
+  // the list panel follows the viewport.
   useEffect(() => {
     if (!map) return;
     const emit = () => {
       const b = map.getBounds();
-      if (!b) return;
-      const ne = b.getNorthEast();
-      const sw = b.getSouthWest();
-      onBounds([sw.lng(), sw.lat(), ne.lng(), ne.lat()]);
+      onBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
     };
-    const l = map.addListener("idle", emit);
-    return () => l.remove();
+    emit();
+    map.on("load", emit);
+    map.on("moveend", emit);
+    map.on("resize", emit);
+    return () => {
+      map.off("load", emit);
+      map.off("moveend", emit);
+      map.off("resize", emit);
+    };
   }, [map, onBounds]);
 
   useEffect(() => {
     if (!map) return;
     registerControls({
-      zoomIn: () => map.setZoom((map.getZoom() ?? TEXAS_ZOOM) + 1),
-      zoomOut: () => map.setZoom((map.getZoom() ?? TEXAS_ZOOM) - 1),
-      resetNorth: () => map.setHeading(0),
-      recenter: () => {
-        map.panTo(TEXAS_CENTER);
-        map.setZoom(TEXAS_ZOOM);
-      },
-      flyTo: (lng, lat) => {
-        map.panTo({ lat, lng });
-        map.setZoom(Math.max(map.getZoom() ?? TEXAS_ZOOM, 14));
-      },
+      zoomIn: () => map.zoomIn(),
+      zoomOut: () => map.zoomOut(),
+      resetNorth: () => map.resetNorth(),
+      recenter: () =>
+        map.flyTo({
+          center: [TEXAS_CENTER.lng, TEXAS_CENTER.lat],
+          zoom: TEXAS_ZOOM,
+        }),
+      flyTo: (lng, lat) =>
+        map.flyTo({
+          center: [lng, lat],
+          zoom: Math.max(map.getZoom(), FOCUS_ZOOM),
+          duration: 1200,
+        }),
     });
   }, [map, registerControls]);
 
@@ -924,9 +984,8 @@ export default function MapView() {
     "idle" | "loading" | "refreshed"
   >("idle");
   const refreshingRef = useRef(false);
-  // Tracks Google Maps JS API load failures (bad/over-quota key, 403, script
-  // 404, network timeout). Surfaced via APIProvider's onError callback below.
-  const [mapsApiError, setMapsApiError] = useState<string | null>(null);
+  // Set when the map itself can't start (no WebGL). Swaps in a retry card.
+  const [mapError, setMapError] = useState<string | null>(null);
   const [selected, setSelected] = useState<HotelFeature | null>(null);
   const [layerMode, setLayerMode] = useState<LayerMode>(
     initialUrlState.layer ?? "pins"
@@ -956,8 +1015,10 @@ export default function MapView() {
   const [sheetOpen, setSheetOpen] = useState(true);
   // Mobile filters accordion (desktop shows filters inline, always expanded).
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  // True while the Street View panorama is open — hide our overlay UI + pins.
-  const [svOpen, setSvOpen] = useState(false);
+  // Street View was a Google-only feature (pegman panorama). It's gone with the
+  // MapLibre basemap; the flag stays so the overlay gating below is unchanged.
+  // The property card's Street View link still opens Google Maps in a new tab.
+  const svOpen = false;
   // Hovered pin (name/RevPAR/rooms tooltip). Independent of `selected` — hover
   // and click selection never affect each other.
   const [hovered, setHovered] = useState<HoverInfo | null>(null);
@@ -1670,14 +1731,15 @@ export default function MapView() {
   // Routes a bare map click. While an area tool is armed it feeds the tool;
   // otherwise it just dismisses the property card (original behavior).
   const onMapClick = useCallback(
-    (e: { detail?: { latLng?: { lat: number; lng: number } | null } }) => {
+    (e: MapClick) => {
       if (areaMode === "radius") {
-        const ll = e.detail?.latLng;
-        if (ll) setCircleCenter({ lat: ll.lat, lng: ll.lng });
+        setCircleCenter({ lat: e.lat, lng: e.lng });
         return;
       }
       // Polygon clicks are handled inside PolygonTool's own map listener.
       if (areaMode === "polygon") return;
+      // A click on a pin/cluster is handled by that layer (select / expand).
+      if (e.picked) return;
       setSelected(null);
     },
     [areaMode]
@@ -1742,36 +1804,17 @@ export default function MapView() {
     onClearAll: resetAll,
   });
 
-  if (!GOOGLE_KEY) {
+  if (mapError) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background p-8">
         <div className="max-w-md rounded-panel bg-surface p-6 text-center shadow-lg ring-1 ring-border">
           <h1 className="text-display">
-            Google Maps key missing
+            The map failed to load
           </h1>
-          <p className="mt-2 text-meta text-muted-foreground">
-            Set{" "}
-            <code className="rounded bg-muted px-1">
-              NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-            </code>{" "}
-            in your environment (and in Vercel) to render the map.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (mapsApiError) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background p-8">
-        <div className="max-w-md rounded-panel bg-surface p-6 text-center shadow-lg ring-1 ring-border">
-          <h1 className="text-display">
-            Google Maps failed to load
-          </h1>
-          <p className="mt-2 text-meta text-muted-foreground">{mapsApiError}</p>
+          <p className="mt-2 text-meta text-muted-foreground">{mapError}</p>
           <button
             type="button"
-            onClick={() => setMapsApiError(null)}
+            onClick={() => setMapError(null)}
             className="transition-base mt-4 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink-hover"
           >
             Retry
@@ -1784,74 +1827,58 @@ export default function MapView() {
   return (
     <div className={`relative h-screen w-screen ${darkMode ? "dark" : ""}`}>
       <div className="absolute inset-0 print:hidden">
-        <APIProvider
-          apiKey={GOOGLE_KEY}
-          onError={(error) => {
-            // Bad/over-quota key, 403, script 404, or network timeout — the JS
-            // API never finishes loading. Swap the map for a recoverable card.
-            console.error("Google Maps API failed to load", error);
-            setMapsApiError(
-              "Check your API key quota and network connection, then retry."
-            );
-          }}
+        <MapCanvas
+          center={TEXAS_CENTER}
+          zoom={TEXAS_ZOOM}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          onClick={onMapClick}
+          onError={setMapError}
         >
-          <Map
-            defaultCenter={TEXAS_CENTER}
-            defaultZoom={TEXAS_ZOOM}
-            minZoom={3}
-            restriction={{
-              latLngBounds: { north: 85, south: -85, west: -179.9, east: 179.9 },
-              strictBounds: false,
-            }}
-            gestureHandling="greedy"
-            disableDefaultUI
-            clickableIcons={false}
-            style={{ width: "100%", height: "100%" }}
-            onClick={onMapClick}
-          >
-            <MapController
-              mapTypeId={MAP_TYPES[mapTypeIndex].id}
-              onBounds={setBounds}
-              registerControls={registerControls}
-              onStreetView={setSvOpen}
-            />
-            <MarkersLayer
-              features={filtered}
-              selectedFeature={selected}
-              visible={layerMode === "pins" && !svOpen}
-              onSelect={flyToFeature}
-              onHover={setHovered}
-              compsetActive={compsetResult != null}
-              compsetSubjectId={compsetSubjectId}
-              compsetPeerIds={compsetPeerIds}
-              compsetFeatures={compsetFeatures}
-            />
-            <HeatLayer
-              features={filtered}
-              visible={layerMode === "heatmap" && !svOpen}
-            />
-            <PolygonTool
-              active={areaMode === "polygon"}
-              vertices={polyVertices}
-              closed={polyClosed}
-              onAddVertex={(v) => setPolyVertices((prev) => [...prev, v])}
-              onClose={() =>
-                setPolyVertices((prev) => {
-                  if (prev.length >= 3) setPolyClosed(true);
-                  return prev;
-                })
-              }
-              onAbort={clearArea}
-            />
-            <RadiusTool
-              active={areaMode === "radius"}
-              center={circleCenter}
-              radius={circleRadius}
-              onRadiusChange={setCircleRadius}
-              onClear={clearArea}
-            />
-          </Map>
-        </APIProvider>
+          <MapController
+            basemap={MAP_TYPES[mapTypeIndex].id}
+            onBounds={setBounds}
+            registerControls={registerControls}
+          />
+          <MarkersLayer
+            features={filtered}
+            selectedFeature={selected}
+            visible={layerMode === "pins" && !svOpen}
+            onSelect={flyToFeature}
+            onHover={setHovered}
+            compsetActive={compsetResult != null}
+            compsetSubjectId={compsetSubjectId}
+            compsetPeerIds={compsetPeerIds}
+            compsetFeatures={compsetFeatures}
+            clickable={
+              areaMode !== "radius" && !(areaMode === "polygon" && !polyClosed)
+            }
+          />
+          <HeatLayer
+            features={filtered}
+            visible={layerMode === "heatmap" && !svOpen}
+          />
+          <PolygonTool
+            active={areaMode === "polygon"}
+            vertices={polyVertices}
+            closed={polyClosed}
+            onAddVertex={(v) => setPolyVertices((prev) => [...prev, v])}
+            onClose={() =>
+              setPolyVertices((prev) => {
+                if (prev.length >= 3) setPolyClosed(true);
+                return prev;
+              })
+            }
+            onAbort={clearArea}
+          />
+          <RadiusTool
+            active={areaMode === "radius"}
+            center={circleCenter}
+            radius={circleRadius}
+            onRadiusChange={setCircleRadius}
+            onClear={clearArea}
+          />
+        </MapCanvas>
         {/* Hover tooltip — positioned in deck-canvas (x,y) space, which shares
             this inset-0 container. Hidden during Street View. */}
         {!svOpen && layerMode === "pins" && <HoverTooltip info={hovered} />}

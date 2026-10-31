@@ -3,7 +3,7 @@ import MapSkeleton from "@/components/MapSkeleton";
 import LeadGate from "@/components/LeadGate";
 import SiteFooter from "@/components/SiteFooter";
 
-// The map (Google Maps + deck.gl) touches `window` on import, so it's client-only.
+// The map (MapLibre + deck.gl) touches `window` on import, so it's client-only.
 const MapView = dynamic(() => import("@/components/MapView"), {
   ssr: false,
   loading: () => <MapSkeleton />,

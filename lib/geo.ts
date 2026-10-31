@@ -1,5 +1,5 @@
 // Small geo helpers for trade-area (radius) tooling. Pure functions, no
-// google.maps dependency, so they are SSR-safe and unit-testable.
+// map-library dependency, so they are SSR-safe and unit-testable.
 
 export interface LatLng {
   lat: number;
@@ -79,4 +79,34 @@ export function polygonAreaSqMi(ring: [number, number][]): number {
     area += (pts[j][0] + pts[i][0]) * (pts[j][1] - pts[i][1]);
   }
   return Math.abs(area / 2);
+}
+
+/**
+ * Closed ring of [lng, lat] points approximating a circle of `radiusMiles`
+ * around `center` (great-circle destination points). Used to draw the radius
+ * tool's trade area on the map. The first point is repeated at the end.
+ */
+export function circleRing(
+  center: LatLng,
+  radiusMiles: number,
+  steps = 96
+): [number, number][] {
+  const d = radiusMiles / EARTH_RADIUS_MILES; // angular distance
+  const lat1 = toRad(center.lat);
+  const lng1 = toRad(center.lng);
+  const ring: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const brng = (2 * Math.PI * (i % steps)) / steps;
+    const lat2 = Math.asin(
+      Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
+    );
+    const lng2 =
+      lng1 +
+      Math.atan2(
+        Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+        Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+      );
+    ring.push([(lng2 * 180) / Math.PI, (lat2 * 180) / Math.PI]);
+  }
+  return ring;
 }

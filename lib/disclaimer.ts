@@ -17,6 +17,9 @@ export const ONE_LINE_CREDIT =
   "Source: Texas Comptroller of Public Accounts (public data). Figures are " +
   "derived estimates — not official.";
 
+/** Map tile credit (the on-map attribution badge is turned off). */
+export const BASEMAP_CREDIT = "Basemap: Esri.";
+
 /** Block 4 — first-run / one-time acknowledgment modal body. */
 export const FIRST_RUN_ACK =
   `${APP_NAME} shows estimated hotel revenue and RevPAR calculated from public ` +

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useMap } from "@vis.gl/react-google-maps";
-import { LatLng, RADIUS_STEPS, RadiusStep } from "@/lib/geo";
+import { useEffect, useState } from "react";
+import type { GeoJSONSource } from "maplibre-gl";
+import { useMap, whenStyleReady } from "./MapCanvas";
+import { circleRing, LatLng, RADIUS_STEPS, RadiusStep } from "@/lib/geo";
 
 type RadiusToolProps = {
   active: boolean;
@@ -12,8 +13,11 @@ type RadiusToolProps = {
   onClear: () => void;
 };
 
-// Mirrors HeatLayer's pattern: all google.maps access lives inside effects, the
-// overlay object is created on mount of the effect and torn down on cleanup.
+const SRC = "area-circle";
+const EMPTY = { type: "FeatureCollection" as const, features: [] };
+
+// The circle is a GeoJSON source + fill/line layers on the MapLibre map, kept
+// for the life of the component and emptied when there's nothing to show.
 export default function RadiusTool({
   active,
   center,
@@ -22,46 +26,61 @@ export default function RadiusTool({
   onClear,
 }: RadiusToolProps) {
   const map = useMap();
-  const circleRef = useRef<google.maps.Circle | null>(null);
   // Pixel position of the circle center, for anchoring the floating stepper.
   const [pixel, setPixel] = useState<{ x: number; y: number } | null>(null);
+
+  // Create the source + layers once (on top of the basemap/heatmap).
+  useEffect(() => {
+    if (!map) return;
+    const cancel = whenStyleReady(map, () => {
+      if (map.getSource(SRC)) return;
+      map.addSource(SRC, { type: "geojson", data: EMPTY });
+      map.addLayer({
+        id: "area-circle-fill",
+        type: "fill",
+        source: SRC,
+        paint: { "fill-color": "#ee2233", "fill-opacity": 0.08 }, // revpar.red
+      });
+      map.addLayer({
+        id: "area-circle-line",
+        type: "line",
+        source: SRC,
+        paint: {
+          "line-color": "#111111",
+          "line-width": 1.5,
+          "line-opacity": 0.9,
+        },
+      });
+    });
+    return () => {
+      cancel();
+      try {
+        if (map.getLayer("area-circle-line")) map.removeLayer("area-circle-line");
+        if (map.getLayer("area-circle-fill")) map.removeLayer("area-circle-fill");
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch {
+        /* map already removed */
+      }
+    };
+  }, [map]);
 
   // Draw / update the circle when a center + radius exist and the tool is on.
   useEffect(() => {
     if (!map) return;
-    if (!active || !center) {
-      circleRef.current?.setMap(null);
-      circleRef.current = null;
-      return;
-    }
-    const radiusMeters = radius * 1609.344;
-    if (!circleRef.current) {
-      circleRef.current = new google.maps.Circle({
-        strokeColor: "#111111",
-        strokeWeight: 1.5,
-        strokeOpacity: 0.9,
-        fillColor: "#ee2233", // revpar.red
-        fillOpacity: 0.08,
-        clickable: false,
-        map,
+    return whenStyleReady(map, () => {
+      const src = map.getSource(SRC) as GeoJSONSource | undefined;
+      if (!src) return;
+      if (!active || !center) {
+        src.setData(EMPTY);
+        return;
+      }
+      src.setData({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Polygon", coordinates: [circleRing(center, radius)] },
       });
-    }
-    const c = circleRef.current;
-    c.setMap(map);
-    c.setCenter({ lat: center.lat, lng: center.lng });
-    c.setRadius(radiusMeters);
-    return () => {
-      // Only fully tear down on unmount; interim updates reuse the instance.
-    };
+    });
   }, [map, active, center, radius]);
-
-  // Remove the circle entirely when the tool unmounts.
-  useEffect(() => {
-    return () => {
-      circleRef.current?.setMap(null);
-      circleRef.current = null;
-    };
-  }, []);
 
   // Track the screen position of the center so the stepper floats with it.
   useEffect(() => {
@@ -70,30 +89,21 @@ export default function RadiusTool({
       return;
     }
     let raf = 0;
-    const overlay = new google.maps.OverlayView();
-    overlay.onAdd = () => {};
-    overlay.onRemove = () => {};
-    overlay.draw = () => {
-      const proj = overlay.getProjection();
-      if (!proj) return;
-      const p = proj.fromLatLngToContainerPixel(
-        new google.maps.LatLng(center.lat, center.lng)
-      );
-      if (p) setPixel({ x: p.x, y: p.y });
+    const draw = () => {
+      const p = map.project([center.lng, center.lat]);
+      setPixel({ x: p.x, y: p.y });
     };
-    overlay.setMap(map);
     const update = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => overlay.draw());
+      raf = requestAnimationFrame(draw);
     };
-    const l1 = map.addListener("bounds_changed", update);
-    const l2 = map.addListener("idle", update);
+    map.on("move", update);
+    map.on("resize", update);
     update();
     return () => {
       cancelAnimationFrame(raf);
-      l1.remove();
-      l2.remove();
-      overlay.setMap(null);
+      map.off("move", update);
+      map.off("resize", update);
     };
   }, [map, active, center]);
 
