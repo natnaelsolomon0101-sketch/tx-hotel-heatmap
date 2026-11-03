@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkChallenge, isVerifyEnabled, verifySecret } from "@/lib/verify";
 
 /**
  * POST /api/lead
@@ -15,11 +16,19 @@ import { NextResponse } from "next/server";
  *
  * The client gets a success response as long as Airtable accepted the lead.
  *
+ * Email check: when verification is configured (lib/verify.ts), the gate first
+ * gets a code from /api/verify and sends { verify: { code, token } } here. A
+ * wrong or expired code is rejected with 400 code "verify_invalid" so the gate
+ * can ask again. A lead with no verify block is still recorded (fail-open) and
+ * flagged as unverified in the owner task and logs.
+ *
  * Env vars (set as Sensitive in Vercel):
  *   AIRTABLE_PAT         — Airtable Personal Access Token
  *   AIRTABLE_BASE_ID     — Airtable base id (appXXXX...)
  *   AIRTABLE_LEADS_TABLE — table name, default "Website Leads"
  *   HUBSPOT_TOKEN        — HubSpot Private App token (optional; dormant until set)
+ *   RESEND_API_KEY, LEAD_VERIFY_FROM, LEAD_VERIFY_SECRET — email code check,
+ *                          see lib/verify.ts (optional; off until set)
  */
 
 type LeadPayload = {
@@ -27,6 +36,12 @@ type LeadPayload = {
   email: string;
   phone: string;
   pageUri?: string;
+  /** "yes" = code checked, "no" = check on but skipped, "off" = not configured */
+  emailVerified?: "yes" | "no" | "off";
+};
+
+type LeadBody = Partial<Omit<LeadPayload, "emailVerified">> & {
+  verify?: { code?: string; token?: string } | null;
 };
 
 const HUBSPOT_CONTACTS_ENDPOINT =
@@ -146,6 +161,11 @@ async function notifyOwners(
     `Email: ${payload.email}`,
     payload.phone ? `Phone: ${payload.phone}` : "",
     payload.pageUri ? `Page: ${payload.pageUri}` : "",
+    payload.emailVerified === "yes"
+      ? "Email verified with a code."
+      : payload.emailVerified === "no"
+        ? "Email NOT verified (code step skipped)."
+        : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -243,7 +263,7 @@ async function sendToAirtable(
 }
 
 export async function POST(req: Request) {
-  let body: Partial<LeadPayload>;
+  let body: LeadBody;
   try {
     body = await req.json();
   } catch {
@@ -265,7 +285,30 @@ export async function POST(req: Request) {
     return bad(400, "Please enter a valid phone number.");
   }
 
-  const payload: LeadPayload = { name, email, phone, pageUri };
+  let emailVerified: LeadPayload["emailVerified"] = "off";
+  const secret = verifySecret();
+  if (isVerifyEnabled() && secret) {
+    const code = String(body.verify?.code ?? "").trim();
+    const vtoken = String(body.verify?.token ?? "");
+    if (code || vtoken) {
+      const check = checkChallenge(email, code, vtoken, secret);
+      if (!check.ok) {
+        console.warn(`[lead] verify failed email="${email}" reason=${check.reason}`);
+        return bad(
+          400,
+          check.reason === "expired"
+            ? "That code has expired. Use Resend code to get a new one."
+            : "That code is not right. Check the email and try again.",
+          "verify_invalid"
+        );
+      }
+      emailVerified = "yes";
+    } else {
+      emailVerified = "no";
+    }
+  }
+
+  const payload: LeadPayload = { name, email, phone, pageUri, emailVerified };
 
   // HubSpot first so Airtable can log its status.
   const hubspot = await sendToHubSpot(payload);
@@ -292,7 +335,7 @@ export async function POST(req: Request) {
   }
   console.log(
     `[lead] captured name="${name}" email="${email}" phone="${phone}" ` +
-      `airtable=${airtableStatus} hubspot=${hubspot.status}`
+      `airtable=${airtableStatus} hubspot=${hubspot.status} verified=${emailVerified}`
   );
 
   return NextResponse.json({

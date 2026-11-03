@@ -26,6 +26,9 @@ the footer carries "Basemap: Esri."
   red / yellow / gray hotels.
 - **Tool rail** — Location (recenter), Polygon, Radius, Layers, Map type. Zoom and
   compass controls sit bottom-right.
+- **Registration gate**: first visit asks for name, email and phone. With
+  `RESEND_API_KEY` + `LEAD_VERIFY_FROM` set, the visitor also confirms a 6-digit
+  code emailed by `/api/verify` before the lead is recorded.
 
 ## Quick start
 
@@ -42,6 +45,11 @@ npm run dev                        # http://localhost:3000
 | Variable | Where | Purpose |
 | --- | --- | --- |
 | `GOOGLE_GEOCODING_API_KEY` | `build-data` script only | Rooftop geocoding via the **Geocoding API**. Server-side only; can be the same key or a separate IP-restricted one. Falls back to the free US Census geocoder if unset. |
+| `AIRTABLE_PAT`, `AIRTABLE_BASE_ID`, `AIRTABLE_LEADS_TABLE` | Vercel (server) | Lead log for the registration gate (`/api/lead`). Optional: the gate never blocks a visitor when unset. |
+| `HUBSPOT_TOKEN` | Vercel (server) | HubSpot contact + owner tasks for each registration. Optional. |
+| `RESEND_API_KEY` | Vercel (server) | Turns on the 6-digit email code step in the registration gate (`/api/verify`), sent through Resend. Needs `LEAD_VERIFY_FROM` too. Off when unset: the gate records the lead without a code. |
+| `LEAD_VERIFY_FROM` | Vercel (server) | Sender for the code email, e.g. `Texas Hotel Data AI <verify@texashoteldata.ai>`. The domain must be verified in Resend. |
+| `LEAD_VERIFY_SECRET` | Vercel (server) | Optional HMAC key for code tokens. Derived from `RESEND_API_KEY` when unset. |
 
 
 ## Data pipeline
