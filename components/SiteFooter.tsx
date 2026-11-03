@@ -50,7 +50,9 @@ function ContactList({ withEmail = true }: { withEmail?: boolean }) {
  * - md and up: a pill at the bottom, centered in the map area left of the
  *   side panel and zoom controls (right padding = panel + zoom column), so it
  *   never covers either: the contact line, then the disclosure (full on wide
- *   screens, the one-line credit on narrower ones).
+ *   screens, the one-line credit on narrower ones). It sits at z-[25], under
+ *   the z-30 overlays (property card, compset, compare tray, welcome tips),
+ *   so it never hides their bottom buttons.
  * - Phones: a thin full-width strip docked to the bottom edge (~42px): the
  *   contacts' phone numbers on one line, the source credit on the next. The
  *   list sheet, compare tray and coachmark sit above it (bottom-11), so it
@@ -92,7 +94,7 @@ export default function SiteFooter() {
       </div>
 
       {/* Tablet / desktop */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 hidden justify-center pb-1 pl-4 pr-[24.5rem] print:hidden md:flex">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[25] hidden justify-center pb-1 pl-4 pr-[24.5rem] print:hidden md:flex">
         <div className="pointer-events-auto flex max-w-4xl flex-col items-center rounded-t-lg bg-surface/85 px-3 py-1 text-subtle shadow-sm ring-1 ring-border backdrop-blur">
           <p className="text-center text-[11px] leading-tight font-medium text-foreground">
             {CONTACT_PROMPT} <ContactList />

@@ -259,9 +259,12 @@ function PropertyCard({
       aria-modal={isMobile || undefined}
       aria-label={titleCase(hotel.name)}
       className={
+        // Desktop: capped at the screen height minus the header and scrolls
+        // inside, so the photo's Close button stays on screen on laptop-height
+        // windows (uncapped, the ~960px card ran off the top at 900px tall).
         isMobile
           ? "fixed inset-x-0 bottom-0 z-30 flex max-h-[90dvh] flex-col overflow-hidden rounded-t-panel bg-surface shadow-lg ring-1 ring-border"
-          : "absolute z-30 overflow-hidden rounded-panel bg-surface shadow-lg ring-1 ring-border inset-x-2 bottom-2 max-h-[80dvh] overflow-y-auto md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-none"
+          : "absolute z-30 overflow-hidden rounded-panel bg-surface shadow-lg ring-1 ring-border inset-x-2 bottom-2 max-h-[80dvh] overflow-y-auto md:inset-x-auto md:left-4 md:right-auto md:bottom-6 md:w-80 md:max-h-[calc(100%-6rem)]"
       }
       style={
         isMobile
@@ -282,11 +285,13 @@ function PropertyCard({
           className="relative shrink-0 cursor-grab touch-none select-none bg-surface pb-1 pt-2.5 active:cursor-grabbing"
         >
           <span className="mx-auto block h-1.5 w-10 rounded-full bg-border-strong" />
+          {/* z-10: the 48px tap target overhangs the photo below it, which
+              otherwise paints over the X and hides it. */}
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="transition-base absolute right-2 top-0.5 flex h-12 w-12 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            className="transition-base absolute right-2 top-0.5 z-10 flex h-12 w-12 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
           >
             <CloseIcon />
           </button>
